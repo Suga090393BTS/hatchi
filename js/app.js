@@ -68,10 +68,27 @@
 
   /* ---- Re-render on state change (only current view) ---- */
   let raf = null;
+  let pendingRender = false;
+  function isEditingField() {
+    const ae = document.activeElement;
+    return ae && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName) && viewEl.contains(ae);
+  }
   Store.subscribe(() => {
     refreshHeader();
+    // Ne pas redessiner pendant une saisie (sélecteur de date, champ texte…) :
+    // cela fermerait le clavier/picker et perdrait la saisie sur iOS.
+    if (isEditingField()) { pendingRender = true; return; }
     if (raf) return;
     raf = requestAnimationFrame(() => { raf = null; render(); });
+  });
+  // Quand l'utilisateur quitte un champ, on applique le rafraîchissement différé.
+  viewEl.addEventListener('focusout', () => {
+    if (!pendingRender) return;
+    setTimeout(() => {
+      if (isEditingField()) return; // un autre champ a pris le focus
+      pendingRender = false;
+      render();
+    }, 50);
   });
 
   /* ---- Boot ---- */
