@@ -506,7 +506,7 @@
     addPurchase({ date, items, cost }) {
       const clean = (items || []).filter((it) => it.ingredientId && it.qty > 0);
       if (!clean.length) return null;
-      const purchase = { id: uid(), date: date || todayISO(), items: clean.map((it) => ({ ingredientId: it.ingredientId, qty: it.qty })), cost: cost ? +cost : 0 };
+      const purchase = { id: uid(), date: date || todayISO(), items: clean.map((it) => { const o = { ingredientId: it.ingredientId, qty: it.qty }; if (it.cut) o.cut = it.cut; return o; }), cost: cost ? +cost : 0 };
       commit((s) => {
         clean.forEach((it) => { s.stock[it.ingredientId] = (s.stock[it.ingredientId] || 0) + it.qty; });
         s.purchases.push(purchase);

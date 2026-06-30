@@ -22,6 +22,16 @@
   function qtyLabel(ing, qty) {
     return ing.unit === 'piece' ? ('×' + Math.ceil(qty)) : grams(Math.round(qty));
   }
+  // Nom de l'ingrédient + morceau éventuel : "Poulet (cuisse)"
+  function itemLabel(it) {
+    const ing = Store.ingredient(it.ingredientId);
+    const base = ing ? ing.name : 'Ingrédient supprimé';
+    return it.cut ? base + ' (' + it.cut + ')' : base;
+  }
+  // Suggestions de morceaux (datalist)
+  const CUTS = ['filet', 'blanc', 'cuisse', 'haut de cuisse', 'pilon', 'aile', 'manchon', 'escalope',
+    'bavette', 'paleron', 'gîte', 'basse côte', 'collier', 'jarret', 'joue', 'macreuse', 'plat de côtes', 'tendron',
+    'épaule', 'gigot', 'côte', 'foie', 'cœur', 'rognons', 'gésier', 'poumon', 'rate', 'tripes'];
 
   Views.shopping = {
     render(root) {
@@ -152,7 +162,7 @@
         h('span.muted', null, 'Dépensé ce mois-ci'), h('strong', { style: 'color:var(--green-700)' }, money(spent))
       ])));
       root.appendChild(h('div.card.flush', null, purchases.slice(0, 15).map((p) => {
-        const summary = p.items.map((it) => { const ing = Store.ingredient(it.ingredientId); return ing ? qtyLabel(ing, it.qty) + ' ' + ing.name : ''; }).filter(Boolean).join(', ');
+        const summary = p.items.map((it) => { const ing = Store.ingredient(it.ingredientId); return ing ? qtyLabel(ing, it.qty) + ' ' + itemLabel(it) : ''; }).filter(Boolean).join(', ');
         return h('div.row', { onClick: () => openPurchaseDetail(p) }, [
           h('div.row-ic', null, '🛒'),
           h('div.row-main', null, [h('strong', null, UI.fmtShortYear(p.date) + (p.cost ? ' · ' + money(p.cost) : '')), h('small', null, summary)]),
@@ -186,7 +196,7 @@
         const ing = Store.ingredient(it.ingredientId);
         return h('div.row', null, [
           h('div.row-ic', null, catIcon(ing ? ing.category : 'autre')),
-          h('div.row-main', null, h('strong', null, ing ? ing.name : 'Ingrédient supprimé')),
+          h('div.row-main', null, h('strong', null, itemLabel(it))),
           h('div.row-end', null, h('strong', null, ing ? qtyLabel(ing, it.qty) : ''))
         ]);
       })),
@@ -209,25 +219,34 @@
       const piece = ing.unit === 'piece';
       const pre = prefill[ing.id] || 0;
       const initVal = piece ? (pre ? Math.ceil(pre) : '') : (pre ? +(pre / 1000).toFixed(2) : '');
-      return { ing, piece, val: initVal === '' ? 0 : initVal, init: initVal };
+      return { ing, piece, cuttable: ['viande', 'abats'].includes(ing.category), cut: '', val: initVal === '' ? 0 : initVal, init: initVal };
     });
 
     const list = h('div');
     rows.forEach((r) => {
       const echo = h('span.muted.small', { style: 'min-width:74px;text-align:right' });
-      const refresh = () => { echo.textContent = r.piece ? '' : (r.val ? '= ' + Math.round(r.val * 1000) + ' g' : ''); };
+      const cutInput = r.cuttable ? h('input.input', { placeholder: 'morceau (ex. cuisse, bavette…) — facultatif', list: 'hatchi-cuts', style: 'margin-top:6px;font-size:14px;padding:8px 10px', onInput: (e) => r.cut = e.target.value.trim() }) : null;
+      const cutWrap = cutInput ? h('div', { style: r.val > 0 ? '' : 'display:none' }, cutInput) : null;
+      const refresh = () => {
+        echo.textContent = r.piece ? '' : (r.val ? '= ' + Math.round(r.val * 1000) + ' g' : '');
+        if (cutWrap) cutWrap.style.display = r.val > 0 ? '' : 'none';
+      };
       const input = h('input.input', { type: 'number', min: '0', step: r.piece ? '1' : '0.1', value: r.init, placeholder: '0', style: 'width:74px', onInput: (e) => { r.val = +e.target.value || 0; refresh(); } });
       refresh();
-      list.appendChild(h('div.inline', { style: 'gap:8px;margin-bottom:8px' }, [
-        h('span', { style: 'flex:1;font-size:14px' }, r.ing.name),
-        input,
-        h('span.muted.small', { style: 'width:22px' }, r.piece ? 'u.' : 'kg'),
-        echo
+      list.appendChild(h('div', { style: 'margin-bottom:8px' }, [
+        h('div.inline', { style: 'gap:8px' }, [
+          h('span', { style: 'flex:1;font-size:14px' }, r.ing.name),
+          input,
+          h('span.muted.small', { style: 'width:22px' }, r.piece ? 'u.' : 'kg'),
+          echo
+        ]),
+        cutWrap
       ]));
     });
 
     const body = h('div', null, [
-      h('p.muted.small', { style: 'margin:0 4px 12px' }, 'Combien en as-tu acheté ? Saisis la viande en kilos — le stock est calculé automatiquement.'),
+      h('datalist', { id: 'hatchi-cuts' }, CUTS.map((c) => h('option', { value: c }))),
+      h('p.muted.small', { style: 'margin:0 4px 12px' }, 'Combien en as-tu acheté ? Saisis la viande en kilos — le stock est calculé automatiquement. Le morceau est facultatif.'),
       h('div.grid2', null, [
         h('div.field', null, [h('label', null, 'Date'), h('input.input', { type: 'date', value: dateVal, max: Store.todayISO(), onChange: (e) => dateVal = e.target.value })]),
         h('div.field', null, [h('label', null, 'Prix total (€, optionnel)'), h('input.input', { type: 'number', step: '0.01', min: '0', placeholder: '0', onInput: (e) => cost = e.target.value })])
@@ -236,7 +255,7 @@
       h('div.modal-actions', null, [
         h('button.btn.subtle', { onClick: () => UI.closeModal() }, 'Annuler'),
         h('button.btn', { style: 'flex:2', onClick: () => {
-          const items = rows.filter((r) => r.val > 0).map((r) => ({ ingredientId: r.ing.id, qty: r.piece ? Math.round(r.val) : Math.round(r.val * 1000) }));
+          const items = rows.filter((r) => r.val > 0).map((r) => ({ ingredientId: r.ing.id, qty: r.piece ? Math.round(r.val) : Math.round(r.val * 1000), cut: r.cut || '' }));
           if (!items.length) { UI.toast('Saisis au moins une quantité'); return; }
           Store.addPurchase({ date: dateVal, items, cost });
           UI.closeModal(); UI.toast('Ajouté au congélateur ✓');
