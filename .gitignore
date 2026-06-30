@@ -1,0 +1,8 @@
+# Réglages locaux Claude Code (non nécessaires en ligne)
+.claude/
+
+# macOS
+.DS_Store
+
+# Sauvegardes exportées
+hatchi-sauvegarde-*.json

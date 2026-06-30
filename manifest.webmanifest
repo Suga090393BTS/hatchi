@@ -1,0 +1,14 @@
+{
+  "name": "Hatchi — Suivi du chien",
+  "short_name": "Hatchi",
+  "description": "Alimentation, traitements et journal de santé du chien.",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#faf7f1",
+  "theme_color": "#1f6f5c",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
