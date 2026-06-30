@@ -151,14 +151,15 @@
       if (spent) root.appendChild(h('div.card', { style: 'padding:12px 16px' }, h('div.inline', { style: 'justify-content:space-between' }, [
         h('span.muted', null, 'Dépensé ce mois-ci'), h('strong', { style: 'color:var(--green-700)' }, money(spent))
       ])));
-      root.appendChild(h('div.card.flush', null, purchases.slice(0, 6).map((p) => {
+      root.appendChild(h('div.card.flush', null, purchases.slice(0, 15).map((p) => {
         const summary = p.items.map((it) => { const ing = Store.ingredient(it.ingredientId); return ing ? qtyLabel(ing, it.qty) + ' ' + ing.name : ''; }).filter(Boolean).join(', ');
-        return h('div.row', null, [
+        return h('div.row', { onClick: () => openPurchaseDetail(p) }, [
           h('div.row-ic', null, '🛒'),
           h('div.row-main', null, [h('strong', null, UI.fmtShortYear(p.date) + (p.cost ? ' · ' + money(p.cost) : '')), h('small', null, summary)]),
-          h('div.row-end', null, h('button.delete-x', { onClick: async () => { if (await UI.confirm('Supprimer cet achat ? (le stock correspondant sera retiré)', { danger: true, ok: 'Supprimer' })) Store.removePurchase(p.id); } }, '✕'))
+          h('div.row-end', null, h('span.muted', null, '›'))
         ]);
       })));
+      root.appendChild(h('p.muted.small.center', { style: 'margin:8px' }, 'Touche un achat pour le voir ou le supprimer.'));
     }
   }
 
@@ -175,6 +176,27 @@
       ])
     ]);
     UI.modal({ title: 'Stock — ' + ing.name, body });
+  }
+
+  /* ---------- Détail d'un achat (voir / supprimer) ---------- */
+  function openPurchaseDetail(p) {
+    const body = h('div', null, [
+      h('p.muted.small', { style: 'margin:0 4px 12px' }, UI.fmtLong(p.date) + (p.cost ? '  ·  ' + money(p.cost) : '')),
+      h('div.card.flush', null, p.items.map((it) => {
+        const ing = Store.ingredient(it.ingredientId);
+        return h('div.row', null, [
+          h('div.row-ic', null, catIcon(ing ? ing.category : 'autre')),
+          h('div.row-main', null, h('strong', null, ing ? ing.name : 'Ingrédient supprimé')),
+          h('div.row-end', null, h('strong', null, ing ? qtyLabel(ing, it.qty) : ''))
+        ]);
+      })),
+      h('p.muted.small', { style: 'margin:10px 4px 0' }, 'Supprimer cet achat retirera ces quantités de ton congélateur.'),
+      h('div.modal-actions', null, [
+        h('button.btn.subtle', { onClick: () => UI.closeModal() }, 'Fermer'),
+        h('button.btn.danger', { style: 'flex:2', onClick: () => { Store.removePurchase(p.id); UI.closeModal(); UI.toast('Achat supprimé'); } }, '🗑 Supprimer cet achat')
+      ])
+    ]);
+    UI.modal({ title: 'Achat du ' + UI.fmtShortYear(p.date), body });
   }
 
   /* ---------- Enregistrer un achat (saisie en KG) ---------- */
