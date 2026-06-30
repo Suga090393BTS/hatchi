@@ -1,8 +1,9 @@
 /* Hatchi service worker — offline app shell cache */
-const CACHE = 'hatchi-v2';
+const CACHE = 'hatchi-v3';
 const ASSETS = [
   './',
   './index.html',
+  './maj.html',
   './css/styles.css',
   './icon.svg',
   './manifest.webmanifest',
@@ -33,7 +34,8 @@ self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
   if (url.origin !== self.location.origin || e.request.method !== 'GET') return; // jamais Supabase / cross-origin
   e.respondWith(
-    fetch(e.request).then((res) => {
+    // 'no-store' force le réseau (contourne le cache HTTP du navigateur) => mises à jour immédiates
+    fetch(new Request(e.request, { cache: 'no-store' })).then((res) => {
       if (res && res.status === 200) {
         const copy = res.clone();
         caches.open(CACHE).then((c) => c.put(e.request, copy));

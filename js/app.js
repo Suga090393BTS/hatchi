@@ -118,10 +118,17 @@
   }
   maybeNotify();
 
-  // Service worker (uniquement si servi en http/https)
+  // Service worker + mise à jour automatique (uniquement si servi en http/https)
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+    let reloaded = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (reloaded) return; reloaded = true; location.reload();
+    });
     window.addEventListener('load', () => {
-      navigator.serviceWorker.register('sw.js').catch(() => {});
+      navigator.serviceWorker.register('sw.js').then((reg) => {
+        reg.update();
+        setInterval(() => reg.update(), 60 * 60 * 1000); // re-vérifie chaque heure
+      }).catch(() => {});
     });
   }
 })();

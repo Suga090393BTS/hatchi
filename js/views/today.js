@@ -154,7 +154,7 @@
           h('strong', null, 'Bientôt épuisé'),
           h('div.small', null, low.map((x) => x.ing.name + ' (reste ' + (x.days < 1 ? '<1' : '~' + Math.floor(x.days)) + ' j)').join(', '))
         ]),
-        h('button.btn.ghost.sm', { onClick: () => App.go('shopping') }, 'Congélateur')
+        h('button.btn.ghost.sm', { onClick: () => App.go('shopping') }, 'Achats')
       ])
     ]);
   }

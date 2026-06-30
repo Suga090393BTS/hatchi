@@ -37,7 +37,7 @@
     render(root) {
       root.appendChild(h('div.seg', { style: 'margin-bottom:14px' }, [
         h('button', { class: view === 'acheter' ? 'on' : '', onClick: () => { view = 'acheter'; App.rerender(); } }, '🛒 À acheter'),
-        h('button', { class: view === 'stock' ? 'on' : '', onClick: () => { view = 'stock'; App.rerender(); } }, '🧊 Mon congélateur')
+        h('button', { class: view === 'stock' ? 'on' : '', onClick: () => { view = 'stock'; App.rerender(); } }, '📦 Achats')
       ]));
       if (view === 'stock') stockView(root); else acheterView(root);
     }
@@ -69,7 +69,7 @@
     if (!buyIds.length) {
       root.appendChild(h('div.card', { style: 'background:var(--green-100);border-color:#bfe0d4' }, [
         h('div.inline', { style: 'gap:10px' }, [h('span', { style: 'font-size:24px' }, '✅'),
-          h('div', null, [h('strong', null, 'Rien à acheter 🎉'), h('div.small.muted', null, 'Ton congélateur couvre déjà toute la période.')])])
+          h('div', null, [h('strong', null, 'Rien à acheter 🎉'), h('div.small.muted', null, 'Ton stock couvre déjà toute la période.')])])
       ]));
       return;
     }
@@ -129,7 +129,7 @@
     const used = Store.needs(Math.max(7, (Store.get().settings.cycleWeeks || 1) * 7));
     const ings = Store.get().ingredients.filter((i) => Store.stockOf(i.id) > 0 || used[i.id]);
     if (!ings.length) {
-      root.appendChild(h('div.card', null, UI.emptyState('🧊', 'Congélateur vide', 'Appuie sur « J’ai fait des courses » pour enregistrer ce que tu as acheté.')));
+      root.appendChild(h('div.card', null, UI.emptyState('📦', 'Aucun article en stock', 'Appuie sur « J’ai fait des courses » pour enregistrer ce que tu as acheté.')));
     } else {
       root.appendChild(h('div.card.flush', null, ings.map((ing) => {
         const qty = Store.stockOf(ing.id);
@@ -200,7 +200,7 @@
           h('div.row-end', null, h('strong', null, ing ? qtyLabel(ing, it.qty) : ''))
         ]);
       })),
-      h('p.muted.small', { style: 'margin:10px 4px 0' }, 'Supprimer cet achat retirera ces quantités de ton congélateur.'),
+      h('p.muted.small', { style: 'margin:10px 4px 0' }, 'Supprimer cet achat retirera ces quantités de ton stock.'),
       h('div.modal-actions', null, [
         h('button.btn.subtle', { onClick: () => UI.closeModal() }, 'Fermer'),
         h('button.btn.danger', { style: 'flex:2', onClick: () => { Store.removePurchase(p.id); UI.closeModal(); UI.toast('Achat supprimé'); } }, '🗑 Supprimer cet achat')
@@ -258,8 +258,8 @@
           const items = rows.filter((r) => r.val > 0).map((r) => ({ ingredientId: r.ing.id, qty: r.piece ? Math.round(r.val) : Math.round(r.val * 1000), cut: r.cut || '' }));
           if (!items.length) { UI.toast('Saisis au moins une quantité'); return; }
           Store.addPurchase({ date: dateVal, items, cost });
-          UI.closeModal(); UI.toast('Ajouté au congélateur ✓');
-        } }, 'Ajouter au congélateur')
+          UI.closeModal(); UI.toast('Ajouté au stock ✓');
+        } }, 'Ajouter au stock')
       ])
     ]);
     UI.modal({ title: '🛒 J’ai fait des courses', body });
