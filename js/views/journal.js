@@ -37,10 +37,45 @@
     ]);
   }
 
+  const WHO_ACTS = [
+    { key: 'balade', label: '🦮 Balade' },
+    { key: 'educ', label: '🎓 Éducateur' },
+    { key: 'veto', label: '🏥 Véto' }
+  ];
+
+  function whoSection(draft) {
+    const people = Store.get().people;
+    const wrap = h('div.field', null, [h('label', null, 'Qui s’en occupe ?')]);
+    if (!people.length) {
+      wrap.appendChild(h('div.muted.small', null, ['Ajoutez des personnes dans ', h('a', { href: '#settings', style: 'color:var(--green);font-weight:700' }, 'Réglages'), '.']));
+      return wrap;
+    }
+    WHO_ACTS.forEach((act) => {
+      draft.who[act.key] = draft.who[act.key] || [];
+      const sel = draft.who[act.key];
+      wrap.appendChild(h('div', { style: 'margin-bottom:8px' }, [
+        h('div.muted.small', { style: 'font-weight:700;margin-bottom:4px' }, act.label),
+        h('div.chip-row', null, people.map((p) => {
+          const on = sel.includes(p.id);
+          const c = h('button', { class: 'chip' + (on ? ' on' : ''), onClick: () => {
+            const i = sel.indexOf(p.id);
+            if (i >= 0) sel.splice(i, 1); else sel.push(p.id);
+            c.classList.toggle('on');
+            if (act.key === 'educ') draft.sorties.educ = sel.length > 0 || draft.sorties.educ;
+            if (act.key === 'veto') draft.sorties.veto = sel.length > 0 || draft.sorties.veto;
+          } }, p.name);
+          return c;
+        }))
+      ]));
+    });
+    return wrap;
+  }
+
   function openEditor(iso) {
     const e = Store.dayEntry(iso);
     let draft = JSON.parse(JSON.stringify(e));
     draft.sorties = draft.sorties || {};
+    draft.who = draft.who || {};
 
     const body = h('div', null, [
       h('div.field', null, [
@@ -62,10 +97,8 @@
         h('label', null, 'Sorties'),
         h('div.chip-row', null, SORTIES.map((s) => chip(s.ic + ' ' + s.label, !!draft.sorties[s.key], () => draft.sorties[s.key] = !draft.sorties[s.key])))
       ]),
-      h('div.grid2', null, [
-        h('div.field', null, [h('label', null, 'Promeneur'), h('input.input', { value: draft.promeneur || '', placeholder: 'Flo, Fanny…', onInput: (ev) => draft.promeneur = ev.target.value })]),
-        h('div.field', null, [h('label', null, 'Température (°C)'), h('input.input', { type: 'number', step: '0.1', value: draft.temp || '', onInput: (ev) => draft.temp = ev.target.value })])
-      ]),
+      whoSection(draft),
+      h('div.field', null, [h('label', null, 'Température (°C)'), h('input.input', { type: 'number', step: '0.1', value: draft.temp || '', onInput: (ev) => draft.temp = ev.target.value })]),
       h('div.field', null, [
         h('label', null, 'Notes'),
         h('textarea.input', { value: draft.notes || '', placeholder: 'Observations, blessures, vomissements, traitements ponctuels…', onInput: (ev) => draft.notes = ev.target.value })
@@ -244,6 +277,27 @@
       barRow('🎓 Éduc', sortiesCount.educ, maxS, 'var(--amber)'),
       barRow('🏥 Véto', sortiesCount.veto, maxS, 'var(--red)')
     ]));
+
+    // Qui s'en occupe
+    const who = Store.whoStats(days);
+    const people = Store.get().people.filter((p) => who[p.id] && who[p.id].total > 0);
+    if (people.length) {
+      const maxW = Math.max(1, ...people.map((p) => who[p.id].total));
+      root.appendChild(h('div.card', null, [
+        h('div.card-head', null, [h('h3', null, '👥 Qui s’en occupe'), h('span.muted.small', null, 'balade · éduc · véto')]),
+        ...people.sort((a, b) => who[b.id].total - who[a.id].total).map((p) => {
+          const w = who[p.id];
+          return h('div', { style: 'margin-bottom:8px' }, [
+            h('div.inline', { style: 'justify-content:space-between;font-size:13px' }, [
+              h('span', null, p.name),
+              h('strong', null, [w.total + '  ', h('span.muted', { style: 'font-weight:400' }, `(🦮${w.balade} · 🎓${w.educ} · 🏥${w.veto})`)])
+            ]),
+            h('div', { style: 'height:7px;background:var(--sand);border-radius:99px;overflow:hidden;margin-top:3px' },
+              h('div', { style: `height:100%;width:${Math.round(w.total / maxW * 100)}%;background:var(--blue);border-radius:99px` }))
+          ]);
+        })
+      ]));
+    }
 
     if (Object.keys(humeurCount).length) {
       const maxH = Math.max(1, ...Object.values(humeurCount));

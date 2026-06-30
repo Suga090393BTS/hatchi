@@ -107,6 +107,10 @@ create policy "hatchi_all" on public.hatchi_state
         ])
       ]));
 
+      // Personnes
+      root.appendChild(h('div.section-title', null, 'Personnes (qui s’occupe d’Hatchi)'));
+      root.appendChild(peopleCard());
+
       // Rotation
       root.appendChild(h('div.section-title', null, 'Rotation des repas'));
       root.appendChild(h('div.card', null, [
@@ -164,6 +168,35 @@ create policy "hatchi_all" on public.hatchi_state
       root.appendChild(h('p.muted.small.center', { style: 'margin-top:18px' }, 'Hatchi · données stockées sur votre appareil' + (s.supabaseUrl ? ' + Supabase' : '')));
     }
   };
+
+  function peopleCard() {
+    const people = Store.get().people;
+    const card = h('div.card.flush');
+    if (!people.length) card.appendChild(h('div.empty', { style: 'padding:18px' }, 'Aucune personne'));
+    people.forEach((p) => {
+      card.appendChild(h('div.row', null, [
+        h('div.row-ic', null, '👤'),
+        h('div.row-main', null, h('strong', null, p.name)),
+        h('div.row-end', null, h('div.inline', { style: 'gap:4px' }, [
+          h('button.btn.ghost.icon', { onClick: () => openPersonEditor(p) }, '✎'),
+          h('button.delete-x', { onClick: async () => { if (await UI.confirm('Supprimer ' + p.name + ' ?', { danger: true, ok: 'Supprimer' })) Store.removePerson(p.id); } }, '✕')
+        ]))
+      ]));
+    });
+    const wrap = h('div', null, [card, h('button.btn.block', { style: 'margin-top:8px', onClick: () => openPersonEditor(null) }, '+ Ajouter une personne')]);
+    return wrap;
+  }
+  function openPersonEditor(p) {
+    let name = p ? p.name : '';
+    const body = h('div', null, [
+      h('div.field', null, [h('label', null, 'Prénom'), h('input.input', { value: name, placeholder: 'Ex. Flo', onInput: (e) => name = e.target.value })]),
+      h('div.modal-actions', null, [
+        h('button.btn.subtle', { onClick: () => UI.closeModal() }, 'Annuler'),
+        h('button.btn', { onClick: () => { if (!name.trim()) { UI.toast('Prénom requis'); return; } if (p) Store.updatePerson(p.id, name.trim()); else Store.addPerson(name.trim()); UI.closeModal(); } }, 'Enregistrer')
+      ])
+    ]);
+    UI.modal({ title: p ? 'Modifier' : 'Nouvelle personne', body });
+  }
 
   function notificationsCard() {
     const supported = 'Notification' in window;

@@ -124,9 +124,10 @@
       ]));
     }
 
+    root.appendChild(h('button.btn.block', { style: 'margin-bottom:10px', onClick: openPurchaseModal }, '🛒 Enregistrer un achat'));
     root.appendChild(h('div.inline', { style: 'gap:8px;margin-bottom:12px' }, [
-      h('button.btn.ghost.sm', { style: 'flex:1', onClick: () => { Store.restockFromNeeds('week'); UI.toast('Stock + 1 semaine'); } }, '+ Semaine'),
-      h('button.btn.ghost.sm', { style: 'flex:1', onClick: () => { Store.restockFromNeeds('month'); UI.toast('Stock + 30 jours'); } }, '+ 30 jours')
+      h('button.btn.ghost.sm', { style: 'flex:1', onClick: () => { Store.restockFromNeeds('week'); UI.toast('Stock + 1 semaine'); } }, 'Réappro 1 sem.'),
+      h('button.btn.ghost.sm', { style: 'flex:1', onClick: () => { Store.restockFromNeeds('month'); UI.toast('Stock + 30 jours'); } }, 'Réappro 30 j')
     ]));
 
     // ingrédients : ceux utilisés en rotation ou ayant du stock
@@ -154,7 +155,64 @@
         ]))
       ]);
     })));
-    root.appendChild(h('p.muted.small', { style: 'margin:10px 4px' }, '± ajuste de ' + 'manière rapide (100 g / 1 pièce). Le stock se déduit automatiquement quand un repas est marqué « donné ».'));
+    root.appendChild(h('p.muted.small', { style: 'margin:10px 4px' }, '± ajuste rapidement (100 g / 1 pièce). Le stock se déduit automatiquement quand un repas est marqué « donné ».'));
+
+    // Historique des achats + dépenses du mois
+    const purchases = Store.purchasesSorted();
+    if (purchases.length) {
+      const spent = Store.spentInMonth();
+      root.appendChild(h('div.section-title', null, 'Achats récents'));
+      if (spent) root.appendChild(h('div.card', { style: 'padding:12px 16px' }, h('div.inline', { style: 'justify-content:space-between' }, [
+        h('span.muted', null, 'Dépensé ce mois-ci'), h('strong', { style: 'color:var(--green-700)' }, UI.money(spent))
+      ])));
+      root.appendChild(h('div.card.flush', null, purchases.slice(0, 6).map((p) => {
+        const summary = p.items.map((it) => { const ing = Store.ingredient(it.ingredientId); return ing ? (ing.unit === 'piece' ? '×' + it.qty + ' ' + ing.name : UI.grams(it.qty) + ' ' + ing.name) : ''; }).filter(Boolean).join(', ');
+        return h('div.row', null, [
+          h('div.row-ic', null, '🛒'),
+          h('div.row-main', null, [h('strong', null, UI.fmtShortYear(p.date) + (p.cost ? ' · ' + UI.money(p.cost) : '')), h('small', null, summary)]),
+          h('div.row-end', null, h('button.delete-x', { onClick: async () => { if (await UI.confirm('Supprimer cet achat ? (le stock sera retiré)', { danger: true, ok: 'Supprimer' })) Store.removePurchase(p.id); } }, '✕'))
+        ]);
+      })));
+    }
+  }
+
+  function openPurchaseModal() {
+    const date = Store.todayISO();
+    let cost = '';
+    // pré-remplir avec les ingrédients viande/abats/os/œuf (les achats courants)
+    const cats = ['viande', 'abats', 'os', 'oeuf', 'legume'];
+    const rows = Store.get().ingredients
+      .filter((i) => cats.includes(i.category))
+      .map((ing) => ({ ing, qty: 0 }));
+    let dateVal = date;
+
+    const list = h('div');
+    rows.forEach((r) => {
+      list.appendChild(h('div.inline', { style: 'gap:8px;margin-bottom:8px' }, [
+        h('span', { style: 'flex:1;font-size:14px' }, r.ing.name),
+        h('input.input', { type: 'number', min: '0', step: r.ing.unit === 'piece' ? '1' : '100', placeholder: '0', style: 'width:90px', onInput: (e) => r.qty = +e.target.value || 0 }),
+        h('span.muted.small', { style: 'width:24px' }, r.ing.unit === 'piece' ? 'u.' : 'g')
+      ]));
+    });
+
+    const body = h('div', null, [
+      h('p.muted.small', { style: 'margin:0 4px 12px' }, 'Saisis les quantités achetées : elles s’ajoutent au stock du congélateur.'),
+      h('div.grid2', null, [
+        h('div.field', null, [h('label', null, 'Date'), h('input.input', { type: 'date', value: dateVal, max: Store.todayISO(), onChange: (e) => dateVal = e.target.value })]),
+        h('div.field', null, [h('label', null, 'Prix total (€, optionnel)'), h('input.input', { type: 'number', step: '0.01', min: '0', placeholder: '0', onInput: (e) => cost = e.target.value })])
+      ]),
+      h('div.field', null, [h('label', null, 'Quantités achetées'), list]),
+      h('div.modal-actions', null, [
+        h('button.btn.subtle', { onClick: () => UI.closeModal() }, 'Annuler'),
+        h('button.btn', { style: 'flex:2', onClick: () => {
+          const items = rows.filter((r) => r.qty > 0).map((r) => ({ ingredientId: r.ing.id, qty: r.qty }));
+          if (!items.length) { UI.toast('Saisis au moins une quantité'); return; }
+          Store.addPurchase({ date: dateVal, items, cost });
+          UI.closeModal(); UI.toast('Achat ajouté au stock ✓');
+        } }, 'Ajouter au stock')
+      ])
+    ]);
+    UI.modal({ title: 'Enregistrer un achat', body });
   }
 
   function editStock(ing) {

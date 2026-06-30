@@ -54,6 +54,11 @@
     ];
   }
 
+  // Personnes qui s'occupent du chien (repris du sheet HATCHI 2026). Modifiables.
+  function seedPeople() {
+    return ['Flo', 'Fanny', 'Alex', 'Noune'].map((n) => ({ id: uid(), name: n }));
+  }
+
   function emptyState() {
     return {
       version: 1,
@@ -73,9 +78,11 @@
       meals: [],                 // repas-types : {id,name,items:[{ingredientId,qty}]}
       rotation: {},              // clé "w{week}-{dayIdx}-{slot}" => [mealId...]  (slot: 'matin'|'soir')
       treatments: seedTreatments(),
-      journal: {},               // dateISO => {repasMatin,repasSoir,selles,humeur,sorties:{},promeneur,temp,soins:[],notes,photo}
+      journal: {},               // dateISO => {repasMatin,repasSoir,selles,humeur,sorties:{},who:{},promeneur,temp,soins:[],notes,photo}
       weights: [],               // [{id, date, kg}]
-      stock: {}                  // ingredientId => quantité en stock (g ou pièces)
+      stock: {},                 // ingredientId => quantité en stock (g ou pièces)
+      people: seedPeople(),      // [{id, name}]
+      purchases: []              // [{id, date, items:[{ingredientId, qty}], cost}]
     };
   }
 
@@ -154,6 +161,8 @@
     if (typeof s.journal !== 'object' || !s.journal) s.journal = {};
     if (!Array.isArray(s.weights)) s.weights = [];
     if (typeof s.stock !== 'object' || !s.stock) s.stock = {};
+    if (!Array.isArray(s.people)) s.people = seedPeople();
+    if (!Array.isArray(s.purchases)) s.purchases = [];
     return s;
   }
 
@@ -381,6 +390,45 @@
         s.journal[iso] = cur;
       });
     },
+    // Qui fait quoi : activity ∈ 'balade'|'educ'|'veto'
+    toggleDayWho(iso, activity, personId) {
+      commit((s) => {
+        const cur = s.journal[iso] || { sorties: {}, soins: [] };
+        cur.who = cur.who || {};
+        const set = new Set(cur.who[activity] || []);
+        if (set.has(personId)) set.delete(personId); else set.add(personId);
+        cur.who[activity] = [...set];
+        // cohérence avec les cases sorties
+        cur.sorties = cur.sorties || {};
+        if (activity === 'educ') cur.sorties.educ = cur.who.educ.length > 0 || cur.sorties.educ;
+        if (activity === 'veto') cur.sorties.veto = cur.who.veto.length > 0 || cur.sorties.veto;
+        s.journal[iso] = cur;
+      });
+    },
+
+    /* ---- Personnes ---- */
+    person: (id) => state.people.find((p) => p.id === id),
+    personName(id) { const p = this.person(id); return p ? p.name : '?'; },
+    addPerson(name) { const p = { id: uid(), name: (name || '').trim() || 'Sans nom' }; commit((s) => s.people.push(p)); return p; },
+    updatePerson(id, name) { commit((s) => { const p = s.people.find((x) => x.id === id); if (p) p.name = name; }); },
+    removePerson(id) {
+      commit((s) => {
+        s.people = s.people.filter((x) => x.id !== id);
+        Object.values(s.journal).forEach((d) => { if (d.who) Object.keys(d.who).forEach((a) => { d.who[a] = (d.who[a] || []).filter((pid) => pid !== id); }); });
+      });
+    },
+    // Compte par personne sur une plage : {personId: {balade, educ, veto, total}}
+    whoStats(days) {
+      const out = {};
+      state.people.forEach((p) => { out[p.id] = { balade: 0, educ: 0, veto: 0, total: 0 }; });
+      days.forEach((iso) => {
+        const w = (state.journal[iso] || {}).who || {};
+        ['balade', 'educ', 'veto'].forEach((a) => (w[a] || []).forEach((pid) => {
+          if (out[pid]) { out[pid][a]++; out[pid].total++; }
+        }));
+      });
+      return out;
+    },
 
     /* ---- Poids ---- */
     weightsSorted() { return state.weights.slice().sort((a, b) => a.date.localeCompare(b.date)); },
@@ -454,6 +502,31 @@
         .map((ing) => ({ ing, days: this.coverageDays(ing.id) }))
         .filter((x) => x.days !== Infinity && x.days < seuil);
     },
+    /* ---- Achats (ajoutent au stock) ---- */
+    addPurchase({ date, items, cost }) {
+      const clean = (items || []).filter((it) => it.ingredientId && it.qty > 0);
+      if (!clean.length) return null;
+      const purchase = { id: uid(), date: date || todayISO(), items: clean.map((it) => ({ ingredientId: it.ingredientId, qty: it.qty })), cost: cost ? +cost : 0 };
+      commit((s) => {
+        clean.forEach((it) => { s.stock[it.ingredientId] = (s.stock[it.ingredientId] || 0) + it.qty; });
+        s.purchases.push(purchase);
+      });
+      return purchase;
+    },
+    removePurchase(id, { restock } = {}) {
+      commit((s) => {
+        const p = s.purchases.find((x) => x.id === id);
+        if (p && restock === false) { /* on ne retire pas du stock */ }
+        else if (p) { p.items.forEach((it) => { s.stock[it.ingredientId] = Math.max(0, (s.stock[it.ingredientId] || 0) - it.qty); }); }
+        s.purchases = s.purchases.filter((x) => x.id !== id);
+      });
+    },
+    purchasesSorted() { return state.purchases.slice().sort((a, b) => b.date.localeCompare(a.date)); },
+    spentInMonth(yearMonth) { // 'YYYY-MM' ; défaut = mois courant
+      const ym = yearMonth || todayISO().slice(0, 7);
+      return state.purchases.filter((p) => p.date.slice(0, 7) === ym).reduce((sum, p) => sum + (p.cost || 0), 0);
+    },
+
     // Marquer un repas donné + déduire/réintégrer le stock (idempotent)
     setMealGiven(iso, slot, given) {
       const meals = this.mealsForDay(iso, slot);
