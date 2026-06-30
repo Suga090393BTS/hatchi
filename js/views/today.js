@@ -151,10 +151,10 @@
       h('div.inline', { style: 'gap:10px' }, [
         h('span', { style: 'font-size:22px' }, '🧊'),
         h('div', { style: 'flex:1' }, [
-          h('strong', null, 'Stock bas'),
-          h('div.small', null, low.map((x) => x.ing.name + ' (' + (x.days < 1 ? '<1' : Math.floor(x.days)) + ' j)').join(', '))
+          h('strong', null, 'Bientôt épuisé'),
+          h('div.small', null, low.map((x) => x.ing.name + ' (reste ' + (x.days < 1 ? '<1' : '~' + Math.floor(x.days)) + ' j)').join(', '))
         ]),
-        h('button.btn.ghost.sm', { onClick: () => App.go('shopping') }, 'Stock')
+        h('button.btn.ghost.sm', { onClick: () => App.go('shopping') }, 'Congélateur')
       ])
     ]);
   }
