@@ -30,6 +30,11 @@
       V('Rognons', 'abats', 'g', 0),
       V('Os charnu', 'os', 'piece', 1.00),
       V('Œuf', 'oeuf', 'piece', 0.40),
+      V('Poulet entier', 'entier', 'g', 0),
+      V('Lapin entier', 'entier', 'g', 0),
+      V('Poussin', 'entier', 'piece', 0),
+      V('Caille', 'entier', 'piece', 0),
+      V('Sardine entière', 'entier', 'g', 0),
       V('Carotte', 'legume', 'g', 2.00),
       V('Brocoli', 'legume', 'g', 2.50),
       V('Haricot vert', 'legume', 'g', 3.00),
@@ -163,12 +168,8 @@
     if (typeof s.stock !== 'object' || !s.stock) s.stock = {};
     if (!Array.isArray(s.people)) s.people = seedPeople();
     if (!Array.isArray(s.purchases)) s.purchases = [];
-    // Nettoyage : retire les articles « animaux entiers » ajoutés par erreur (v6), s'ils n'ont jamais servi
-    const entierNames = ['Poulet entier', 'Lapin entier', 'Poussin', 'Caille', 'Sardine entière'];
-    s.ingredients = s.ingredients.filter((i) => !(i.category === 'entier' && entierNames.includes(i.name)
-      && !(s.stock[i.id] > 0)
-      && !s.purchases.some((p) => (p.items || []).some((it) => it.ingredientId === i.id))
-      && !s.meals.some((m) => (m.items || []).some((it) => it.ingredientId === i.id))));
+    // Onglet « Animaux entiers » : ajoute les articles par défaut aux données existantes
+    if (!s.ingredients.some((i) => i.category === 'entier')) s.ingredients = s.ingredients.concat(base.ingredients.filter((i) => i.category === 'entier'));
     return s;
   }
 

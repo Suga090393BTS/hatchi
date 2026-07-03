@@ -11,9 +11,9 @@
   let view = 'acheter'; // 'acheter' | 'stock'
   let stockCat = 'tout'; // filtre catégorie du stock : 'tout' | 'viande' | 'legume'…
 
-  const CAT_ORDER = ['viande', 'abats', 'os', 'oeuf', 'legume', 'autre'];
-  const CAT_LABEL = { viande: '🥩 Viandes', abats: '🫀 Abats', os: '🦴 Os', oeuf: '🥚 Œufs', legume: '🥕 Légumes', autre: '📦 Autre' };
-  const catIcon = (c) => ({ viande: '🥩', abats: '🫀', os: '🦴', oeuf: '🥚', legume: '🥕' })[c] || '📦';
+  const CAT_ORDER = ['viande', 'abats', 'os', 'entier', 'oeuf', 'legume', 'autre'];
+  const CAT_LABEL = { viande: '🥩 Viandes', abats: '🫀 Abats', os: '🦴 Os', entier: '🐔 Animaux entiers', oeuf: '🥚 Œufs', legume: '🥕 Légumes', autre: '📦 Autre' };
+  const catIcon = (c) => ({ viande: '🥩', abats: '🫀', os: '🦴', entier: '🐔', oeuf: '🥚', legume: '🥕' })[c] || '📦';
 
   function lineCost(ing, qty) {
     if (!ing || !ing.price) return 0;
@@ -284,7 +284,7 @@
 
     /* --- Étape 2 : choisir un article (onglets par catégorie) --- */
     function pickStep() {
-      const cats = ['viande', 'abats', 'os', 'oeuf', 'legume'];
+      const cats = ['viande', 'abats', 'os', 'entier', 'oeuf', 'legume'];
       const all = Store.get().ingredients.filter((i) => cats.includes(i.category));
       const present = CAT_ORDER.filter((cat) => all.some((i) => i.category === cat));
       const list = h('div');
