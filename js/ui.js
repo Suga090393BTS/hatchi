@@ -117,14 +117,16 @@
   function confirm(message, opts) {
     opts = opts || {};
     return new Promise((resolve) => {
+      let done = false;
+      const finish = (val) => { if (done) return; done = true; resolve(val); };
       const body = h('div', null, [
         h('p.muted', { style: 'margin:4px 4px 0' }, message),
         h('div.modal-actions', null, [
-          h('button.btn.subtle', { onClick: () => { closeModal(); resolve(false); } }, opts.cancel || 'Annuler'),
-          h('button', { class: 'btn ' + (opts.danger ? 'danger' : ''), onClick: () => { closeModal(); resolve(true); } }, opts.ok || 'Confirmer')
+          h('button.btn.subtle', { onClick: () => { finish(false); closeModal(); } }, opts.cancel || 'Annuler'),
+          h('button', { class: 'btn ' + (opts.danger ? 'danger' : ''), onClick: () => { finish(true); closeModal(); } }, opts.ok || 'Confirmer')
         ])
       ]);
-      modal({ title: opts.title || 'Confirmer', body, onClose: () => resolve(false) });
+      modal({ title: opts.title || 'Confirmer', body, onClose: () => finish(false) });
     });
   }
 
