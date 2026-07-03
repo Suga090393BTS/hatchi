@@ -222,7 +222,6 @@
       return { ing, piece, cuttable: ['viande', 'abats'].includes(ing.category), cut: '', val: initVal === '' ? 0 : initVal, init: initVal };
     });
 
-    const list = h('div');
     rows.forEach((r) => {
       const echo = h('span.muted.small', { style: 'min-width:74px;text-align:right' });
       const cutInput = r.cuttable ? h('input.input', { placeholder: 'morceau (ex. cuisse, bavette…) — facultatif', list: 'hatchi-cuts', style: 'margin-top:6px;font-size:14px;padding:8px 10px', onInput: (e) => r.cut = e.target.value.trim() }) : null;
@@ -233,7 +232,7 @@
       };
       const input = h('input.input', { type: 'number', min: '0', step: r.piece ? '1' : '0.1', value: r.init, placeholder: '0', style: 'width:74px', onInput: (e) => { r.val = +e.target.value || 0; refresh(); } });
       refresh();
-      list.appendChild(h('div', { style: 'margin-bottom:8px' }, [
+      r.el = h('div', { style: 'margin-bottom:8px' }, [
         h('div.inline', { style: 'gap:8px' }, [
           h('span', { style: 'flex:1;font-size:14px' }, r.ing.name),
           input,
@@ -241,7 +240,16 @@
           echo
         ]),
         cutWrap
-      ]));
+      ]);
+    });
+
+    // Groupé par catégorie (Viandes, Abats, Œufs, Légumes…)
+    const list = h('div');
+    CAT_ORDER.forEach((cat) => {
+      const catRows = rows.filter((r) => r.ing.category === cat);
+      if (!catRows.length) return;
+      list.appendChild(h('div', { style: 'font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--ink-soft);margin:14px 2px 8px' }, CAT_LABEL[cat]));
+      catRows.forEach((r) => list.appendChild(r.el));
     });
 
     const body = h('div', null, [

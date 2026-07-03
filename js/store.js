@@ -421,11 +421,11 @@
     whoStats(days) {
       const out = {};
       state.people.forEach((p) => { out[p.id] = { balade: 0, educ: 0, veto: 0, total: 0 }; });
+      const add = (cat, pids) => (pids || []).forEach((pid) => { if (out[pid]) { out[pid][cat]++; out[pid].total++; } });
       days.forEach((iso) => {
         const w = (state.journal[iso] || {}).who || {};
-        ['balade', 'educ', 'veto'].forEach((a) => (w[a] || []).forEach((pid) => {
-          if (out[pid]) { out[pid][a]++; out[pid].total++; }
-        }));
+        add('balade', w.ville); add('balade', w.foret); add('balade', w.balade); // balade = ville + forêt (+ ancien)
+        add('educ', w.educ); add('veto', w.veto);
       });
       return out;
     },

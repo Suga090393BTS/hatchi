@@ -37,37 +37,43 @@
     ]);
   }
 
-  const WHO_ACTS = [
-    { key: 'balade', label: '🦮 Balade' },
+  // Activités = sorties + qui s'en occupe (fusionnées)
+  const ACTS = [
+    { key: 'ville', label: '🏙️ Ville' },
+    { key: 'foret', label: '🌲 Forêt' },
     { key: 'educ', label: '🎓 Éducateur' },
     { key: 'veto', label: '🏥 Véto' }
   ];
 
-  function whoSection(draft) {
+  function activitiesSection(draft) {
     const people = Store.get().people;
-    const wrap = h('div.field', null, [h('label', null, 'Qui s’en occupe ?')]);
-    if (!people.length) {
-      wrap.appendChild(h('div.muted.small', null, ['Ajoutez des personnes dans ', h('a', { href: '#settings', style: 'color:var(--green);font-weight:700' }, 'Réglages'), '.']));
-      return wrap;
-    }
-    WHO_ACTS.forEach((act) => {
+    const wrap = h('div.field', null, [h('label', null, 'Sorties & activités')]);
+    ACTS.forEach((act) => {
+      draft.sorties = draft.sorties || {};
+      draft.who = draft.who || {};
       draft.who[act.key] = draft.who[act.key] || [];
       const sel = draft.who[act.key];
-      wrap.appendChild(h('div', { style: 'margin-bottom:8px' }, [
-        h('div.muted.small', { style: 'font-weight:700;margin-bottom:4px' }, act.label),
-        h('div.chip-row', null, people.map((p) => {
-          const on = sel.includes(p.id);
-          const c = h('button', { class: 'chip' + (on ? ' on' : ''), onClick: () => {
+
+      const peopleRow = people.length ? h('div.chip-row', { style: 'margin:6px 0 0 10px' + (draft.sorties[act.key] ? '' : ';display:none') },
+        people.map((p) => {
+          const c = h('button', { class: 'chip' + (sel.includes(p.id) ? ' on' : ''), onClick: () => {
             const i = sel.indexOf(p.id);
-            if (i >= 0) sel.splice(i, 1); else sel.push(p.id);
+            if (i >= 0) sel.splice(i, 1);
+            else { sel.push(p.id); draft.sorties[act.key] = true; actChip.classList.add('on'); peopleRow.style.display = ''; }
             c.classList.toggle('on');
-            if (act.key === 'educ') draft.sorties.educ = sel.length > 0 || draft.sorties.educ;
-            if (act.key === 'veto') draft.sorties.veto = sel.length > 0 || draft.sorties.veto;
           } }, p.name);
           return c;
-        }))
-      ]));
+        })) : null;
+
+      const actChip = h('button', { class: 'chip' + (draft.sorties[act.key] ? ' on' : ''), onClick: () => {
+        draft.sorties[act.key] = !draft.sorties[act.key];
+        actChip.classList.toggle('on', draft.sorties[act.key]);
+        if (peopleRow) peopleRow.style.display = draft.sorties[act.key] ? '' : 'none';
+      } }, act.label);
+
+      wrap.appendChild(h('div', { style: 'margin-bottom:10px' }, [actChip, peopleRow]));
     });
+    if (!people.length) wrap.appendChild(h('div.muted.small', { style: 'margin-top:4px' }, ['Astuce : ajoute des personnes dans ', h('strong', null, 'Réglages'), ' pour noter qui promène Hatchi.']));
     return wrap;
   }
 
@@ -93,11 +99,7 @@
         h('label', null, 'Humeur / forme'),
         h('div.chip-row', null, HUMEUR.map((v) => chip(v, draft.humeur === v, () => draft.humeur = (draft.humeur === v ? '' : v))))
       ]),
-      h('div.field', null, [
-        h('label', null, 'Sorties'),
-        h('div.chip-row', null, SORTIES.map((s) => chip(s.ic + ' ' + s.label, !!draft.sorties[s.key], () => draft.sorties[s.key] = !draft.sorties[s.key])))
-      ]),
-      whoSection(draft),
+      activitiesSection(draft),
       h('div.field', null, [h('label', null, 'Température (°C)'), h('input.input', { type: 'number', step: '0.1', value: draft.temp || '', onInput: (ev) => draft.temp = ev.target.value })]),
       h('div.field', null, [
         h('label', null, 'Notes'),
