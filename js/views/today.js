@@ -81,20 +81,73 @@
     return ({ collier: '🦟', vermifuge: '🪱', vaccin: '💉', yeux: '👁️', oreilles: '👂', dents: '🦷', griffes: '🐾', toilettage: '🛁' })[type] || '💊';
   }
 
+  // Fenêtre « qui y est allé ? » — s'ouvre automatiquement quand on coche une sortie
+  function openWhoModal(iso, s) {
+    const people = Store.get().people;
+    const entry = Store.dayEntry(iso);
+    const sel = new Set((entry.who || {})[s.key] || []);
+    const chips = people.map((p) => {
+      const c = h('button', {
+        class: 'chip' + (sel.has(p.id) ? ' on' : ''),
+        onClick: () => { if (sel.has(p.id)) sel.delete(p.id); else sel.add(p.id); c.classList.toggle('on'); }
+      }, p.name);
+      return c;
+    });
+    const save = () => {
+      const cur = Store.dayEntry(iso);
+      const who = Object.assign({}, cur.who);
+      who[s.key] = [...sel];
+      Store.updateDay(iso, { who });
+      UI.closeModal();
+    };
+    const body = h('div', null, [
+      h('p.muted.small', { style: 'margin:0 4px 12px' }, 'Qui y est allé avec ' + (Store.get().settings.dogName || 'Hatchi') + ' ?'),
+      h('div.chip-row', null, chips),
+      h('div.modal-actions', null, [
+        h('button.btn.subtle', { onClick: () => UI.closeModal() }, 'Passer'),
+        h('button.btn', { onClick: save }, 'Valider')
+      ])
+    ]);
+    UI.modal({ title: s.ic + ' ' + s.label + ' — avec qui ?', body });
+  }
+
   function sortiesCard(iso) {
     const entry = Store.dayEntry(iso);
     const sorties = entry.sorties || {};
+    const hasPeople = Store.get().people.length > 0;
+
+    // Sous chaque sortie cochée : avec qui, et un lien pour modifier
+    const whoLines = hasPeople ? SORTIES.filter((s) => sorties[s.key]).map((s) => {
+      const ids = (entry.who || {})[s.key] || [];
+      const names = ids.map((id) => { const p = Store.person(id); return p ? p.name : null; }).filter(Boolean);
+      return h('div.inline', { style: 'gap:6px;margin-top:8px;font-size:13px' }, [
+        h('span', null, s.ic),
+        h('span', { class: names.length ? '' : 'muted' }, names.length ? 'avec ' + names.join(', ') : 'avec qui ?'),
+        h('button.linkbtn', { style: 'margin-left:auto', onClick: () => openWhoModal(iso, s) }, 'modifier')
+      ]);
+    }) : [];
+
     return h('div.card', null, [
       h('div.card-head', null, [h('h3', null, 'Sorties & activités')]),
       h('div.chip-row', null, SORTIES.map((s) =>
         h('button', {
           class: 'chip' + (sorties[s.key] ? ' on' : ''),
           onClick: () => {
-            const ns = Object.assign({}, sorties, { [s.key]: !sorties[s.key] });
-            Store.updateDay(iso, { sorties: ns });
+            const on = !sorties[s.key];
+            const ns = Object.assign({}, sorties, { [s.key]: on });
+            const patch = { sorties: ns };
+            if (!on) {
+              // décoché : on retire aussi les personnes associées
+              const who = Object.assign({}, entry.who);
+              who[s.key] = [];
+              patch.who = who;
+            }
+            Store.updateDay(iso, patch);
+            if (on && hasPeople) openWhoModal(iso, s);
           }
         }, [h('span', null, s.ic), h('span', null, s.label)])
-      ))
+      )),
+      whoLines.length ? h('div', { style: 'margin-top:4px' }, whoLines) : null
     ]);
   }
 
