@@ -21,7 +21,7 @@ create policy "hatchi_all" on public.hatchi_state
   function openIngredientEditor(ing) {
     const isNew = !ing;
     let d = ing ? JSON.parse(JSON.stringify(ing)) : { name: '', category: 'viande', unit: 'g', price: 0 };
-    const CATS = [['viande', '🥩 Viande'], ['abats', '🫀 Abats'], ['os', '🦴 Os'], ['entier', '🐔 Animal entier'], ['oeuf', '🥚 Œuf'], ['legume', '🥕 Légume'], ['autre', '📦 Autre']];
+    const CATS = [['viande', '🥩 Viande'], ['abats', '🫀 Abats'], ['os', '🦴 Os'], ['oeuf', '🥚 Œuf'], ['legume', '🥕 Légume'], ['autre', '📦 Autre']];
     const body = h('div', null, [
       h('div.field', null, [h('label', null, 'Nom'), h('input.input', { value: d.name, onInput: (e) => d.name = e.target.value })]),
       h('div.grid2', null, [
@@ -49,7 +49,7 @@ create policy "hatchi_all" on public.hatchi_state
     const body = h('div', null, [
       h('div.card.flush', null, Store.get().ingredients.map((ing) =>
         h('div.row', { onClick: () => { UI.closeModal(); setTimeout(() => openIngredientEditor(ing), 50); } }, [
-          h('div.row-ic', null, ({ viande: '🥩', abats: '🫀', os: '🦴', entier: '🐔', oeuf: '🥚', legume: '🥕' })[ing.category] || '📦'),
+          h('div.row-ic', null, ({ viande: '🥩', abats: '🫀', os: '🦴', oeuf: '🥚', legume: '🥕' })[ing.category] || '📦'),
           h('div.row-main', null, [h('strong', null, ing.name), h('small', null, ing.price ? money(ing.price) + (ing.unit === 'piece' ? '/u.' : '/kg') : 'Prix non défini')]),
           h('div.row-end', null, h('span.muted', null, '›'))
         ]))),

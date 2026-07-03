@@ -30,11 +30,6 @@
       V('Rognons', 'abats', 'g', 0),
       V('Os charnu', 'os', 'piece', 1.00),
       V('Œuf', 'oeuf', 'piece', 0.40),
-      V('Poulet entier', 'entier', 'g', 0),
-      V('Lapin entier', 'entier', 'g', 0),
-      V('Poussin', 'entier', 'piece', 0),
-      V('Caille', 'entier', 'piece', 0),
-      V('Sardine entière', 'entier', 'g', 0),
       V('Carotte', 'legume', 'g', 2.00),
       V('Brocoli', 'legume', 'g', 2.50),
       V('Haricot vert', 'legume', 'g', 3.00),
@@ -160,8 +155,6 @@
     const base = emptyState();
     s.settings = Object.assign({}, base.settings, s.settings || {});
     if (!Array.isArray(s.ingredients)) s.ingredients = base.ingredients;
-    // nouvel onglet « Animaux entiers » : on ajoute les articles par défaut aux données existantes
-    else if (!s.ingredients.some((i) => i.category === 'entier')) s.ingredients = s.ingredients.concat(base.ingredients.filter((i) => i.category === 'entier'));
     if (!Array.isArray(s.meals)) s.meals = [];
     if (!Array.isArray(s.treatments)) s.treatments = base.treatments;
     if (typeof s.rotation !== 'object' || !s.rotation) s.rotation = {};
