@@ -163,6 +163,12 @@
     if (typeof s.stock !== 'object' || !s.stock) s.stock = {};
     if (!Array.isArray(s.people)) s.people = seedPeople();
     if (!Array.isArray(s.purchases)) s.purchases = [];
+    // Nettoyage : retire les articles « animaux entiers » ajoutés par erreur (v6), s'ils n'ont jamais servi
+    const entierNames = ['Poulet entier', 'Lapin entier', 'Poussin', 'Caille', 'Sardine entière'];
+    s.ingredients = s.ingredients.filter((i) => !(i.category === 'entier' && entierNames.includes(i.name)
+      && !(s.stock[i.id] > 0)
+      && !s.purchases.some((p) => (p.items || []).some((it) => it.ingredientId === i.id))
+      && !s.meals.some((m) => (m.items || []).some((it) => it.ingredientId === i.id))));
     return s;
   }
 
