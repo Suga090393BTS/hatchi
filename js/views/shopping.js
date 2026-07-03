@@ -211,7 +211,10 @@
         return h('div.row', null, [
           h('div.row-ic', null, catIcon(ing ? ing.category : 'autre')),
           h('div.row-main', null, h('strong', null, itemLabel(it))),
-          h('div.row-end', null, h('strong', null, ing ? qtyLabel(ing, it.qty) : ''))
+          h('div.row-end', null, [
+            h('strong', null, ing ? qtyLabel(ing, it.qty) : ''),
+            it.price ? h('span.muted.small', null, money(it.price)) : null
+          ])
         ]);
       })),
       h('p.muted.small', { style: 'margin:10px 4px 0' }, 'Supprimer cet achat retirera ces quantités de ton stock.'),
@@ -223,86 +226,147 @@
     UI.modal({ title: 'Achat du ' + UI.fmtShortYear(p.date), body });
   }
 
-  /* ---------- Enregistrer un achat (saisie en KG) ---------- */
+  /* ---------- Enregistrer un achat — article par article ----------
+     1) Panier : la liste de ce que j'ai acheté (+ total calculé)
+     2) Choix d'un article (onglets par catégorie)
+     3) Fiche article : poids/nombre + prix au kilo OU prix total
+        (l'autre se calcule tout seul) + morceau pour viandes/abats */
   function openPurchaseModal(prefill) {
-    prefill = prefill || {};
     let dateVal = Store.todayISO();
-    let cost = '';
-    const cats = ['viande', 'abats', 'os', 'oeuf', 'legume'];
-    const rows = Store.get().ingredients.filter((i) => cats.includes(i.category)).map((ing) => {
-      const piece = ing.unit === 'piece';
-      const pre = prefill[ing.id] || 0;
-      const initVal = piece ? (pre ? Math.ceil(pre) : '') : (pre ? +(pre / 1000).toFixed(2) : '');
-      return { ing, piece, cuttable: ['viande', 'abats'].includes(ing.category), cut: '', val: initVal === '' ? 0 : initVal, init: initVal };
-    });
-
-    let updateTabs = () => {}; // rempli plus bas, appelé à chaque saisie
-    rows.forEach((r) => {
-      const echo = h('span.muted.small', { style: 'min-width:74px;text-align:right' });
-      const cutInput = r.cuttable ? h('input.input', { placeholder: 'morceau (ex. cuisse, bavette…) — facultatif', list: 'hatchi-cuts', style: 'margin-top:6px;font-size:14px;padding:8px 10px', onInput: (e) => r.cut = e.target.value.trim() }) : null;
-      const cutWrap = cutInput ? h('div', { style: r.val > 0 ? '' : 'display:none' }, cutInput) : null;
-      const refresh = () => {
-        echo.textContent = r.piece ? '' : (r.val ? '= ' + Math.round(r.val * 1000) + ' g' : '');
-        if (cutWrap) cutWrap.style.display = r.val > 0 ? '' : 'none';
-      };
-      const input = h('input.input', { type: 'number', min: '0', step: r.piece ? '1' : '0.1', value: r.init, placeholder: '0', style: 'width:74px', onInput: (e) => { r.val = +e.target.value || 0; refresh(); updateTabs(); } });
-      refresh();
-      r.el = h('div', { style: 'margin-bottom:8px' }, [
-        h('div.inline', { style: 'gap:8px' }, [
-          h('span', { style: 'flex:1;font-size:14px' }, r.ing.name),
-          input,
-          h('span.muted.small', { style: 'width:22px' }, r.piece ? 'u.' : 'kg'),
-          echo
-        ]),
-        cutWrap
-      ]);
-    });
-
-    // Onglets par catégorie : on ne voit qu'une catégorie à la fois (Viandes, Légumes…)
-    const present = CAT_ORDER.filter((cat) => rows.some((r) => r.ing.category === cat));
-    let activeCat = present.find((cat) => rows.some((r) => r.ing.category === cat && r.init)) || present[0];
-    const list = h('div');
-    const tabs = {};
-    const countOf = (cat) => rows.filter((r) => r.ing.category === cat && r.val > 0).length;
-    updateTabs = () => {
-      present.forEach((cat) => {
-        const n = countOf(cat);
-        tabs[cat].textContent = CAT_LABEL[cat] + (n ? ' · ' + n : '');
-        tabs[cat].classList.toggle('on', cat === activeCat);
+    let pickCat = null; // dernier onglet utilisé dans le choix d'article
+    const basket = [];
+    if (prefill) {
+      Object.keys(prefill).forEach((id) => {
+        const ing = Store.ingredient(id);
+        if (!ing || !(prefill[id] > 0)) return;
+        const piece = ing.unit === 'piece';
+        const qty = piece ? Math.ceil(prefill[id]) : Math.round(prefill[id]);
+        const ppk = ing.price || 0;
+        basket.push({ ing, qty, cut: '', ppk, price: ppk ? +(piece ? ppk * qty : ppk * qty / 1000).toFixed(2) : 0 });
       });
-    };
-    const showCat = (cat) => {
-      activeCat = cat;
-      UI.clear(list);
-      rows.filter((r) => r.ing.category === cat).forEach((r) => list.appendChild(r.el));
-      updateTabs();
-    };
-    const tabBar = h('div.chip-row', { style: 'margin:2px 0 10px' }, present.map((cat) => {
-      const b = h('button.chip', { onClick: () => showCat(cat) });
-      tabs[cat] = b;
-      return b;
-    }));
-    showCat(activeCat);
+    }
 
-    const body = h('div', null, [
-      h('datalist', { id: 'hatchi-cuts' }, CUTS.map((c) => h('option', { value: c }))),
-      h('p.muted.small', { style: 'margin:0 4px 12px' }, 'Combien en as-tu acheté ? Saisis la viande en kilos — le stock est calculé automatiquement. Le morceau est facultatif.'),
-      h('div.grid2', null, [
+    /* --- Étape 1 : le panier --- */
+    function mainStep() {
+      const total = basket.reduce((s, l) => s + (l.price || 0), 0);
+      const listEl = basket.length
+        ? h('div.card.flush', null, basket.map((l, idx) => h('div.row', { onClick: () => formStep(l.ing, l) }, [
+            h('div.row-ic', null, catIcon(l.ing.category)),
+            h('div.row-main', null, [
+              h('strong', null, l.ing.name + (l.cut ? ' (' + l.cut + ')' : '')),
+              h('small', null, qtyLabel(l.ing, l.qty) + (l.price ? ' · ' + money(l.price) : ' · prix non saisi'))
+            ]),
+            h('div.row-end', null, h('button.delete-x', { onClick: (e) => { e.stopPropagation(); basket.splice(idx, 1); mainStep(); } }, '✕'))
+          ])))
+        : h('p.muted.small', { style: 'margin:4px' }, 'Ajoute tes articles un par un : article, poids, prix — le total se calcule tout seul.');
+
+      const body = h('div', null, [
         h('div.field', null, [h('label', null, 'Date'), h('input.input', { type: 'date', value: dateVal, max: Store.todayISO(), onChange: (e) => dateVal = e.target.value })]),
-        h('div.field', null, [h('label', null, 'Prix total (€, optionnel)'), h('input.input', { type: 'number', step: '0.01', min: '0', placeholder: '0', onInput: (e) => cost = e.target.value })])
-      ]),
-      h('div.field', null, [h('label', null, 'Quantités achetées'), tabBar, list]),
-      h('div.modal-actions', null, [
-        h('button.btn.subtle', { onClick: () => UI.closeModal() }, 'Annuler'),
-        h('button.btn', { style: 'flex:2', onClick: () => {
-          const items = rows.filter((r) => r.val > 0).map((r) => ({ ingredientId: r.ing.id, qty: r.piece ? Math.round(r.val) : Math.round(r.val * 1000), cut: r.cut || '' }));
-          if (!items.length) { UI.toast('Saisis au moins une quantité'); return; }
-          Store.addPurchase({ date: dateVal, items, cost });
-          UI.closeModal(); UI.toast('Ajouté au stock ✓');
-        } }, 'Ajouter au stock')
-      ])
-    ]);
-    UI.modal({ title: '🛒 J’ai fait des courses', body });
+        h('div.field', null, [h('label', null, 'Articles achetés'), listEl]),
+        h('button.btn.subtle.block', { onClick: pickStep }, '+ Ajouter un article'),
+        total ? h('div.inline', { style: 'justify-content:space-between;margin-top:12px;padding:0 4px' }, [
+          h('span.muted', null, 'Total'), h('strong', { style: 'font-size:18px;color:var(--green-700)' }, money(total))
+        ]) : null,
+        h('div.modal-actions', null, [
+          h('button.btn.subtle', { onClick: () => UI.closeModal() }, 'Annuler'),
+          h('button.btn', { style: 'flex:2', onClick: () => {
+            if (!basket.length) { UI.toast('Ajoute au moins un article'); return; }
+            const items = basket.map((l) => ({ ingredientId: l.ing.id, qty: l.qty, cut: l.cut || '', price: l.price || 0 }));
+            Store.addPurchase({ date: dateVal, items, cost: total });
+            // mémorise les prix au kilo saisis pour affiner le budget « À acheter »
+            basket.forEach((l) => { if (l.ppk > 0 && l.ppk !== l.ing.price) Store.updateIngredient(l.ing.id, { price: l.ppk }); });
+            UI.closeModal(); UI.toast('Ajouté au stock ✓');
+          } }, basket.length ? 'Ajouter au stock (' + basket.length + ')' : 'Ajouter au stock')
+        ])
+      ]);
+      UI.modal({ title: '🛒 J’ai fait des courses', body });
+    }
+
+    /* --- Étape 2 : choisir un article (onglets par catégorie) --- */
+    function pickStep() {
+      const cats = ['viande', 'abats', 'os', 'oeuf', 'legume'];
+      const all = Store.get().ingredients.filter((i) => cats.includes(i.category));
+      const present = CAT_ORDER.filter((cat) => all.some((i) => i.category === cat));
+      const list = h('div');
+      const tabs = {};
+      const show = (cat) => {
+        pickCat = cat;
+        present.forEach((c) => tabs[c].classList.toggle('on', c === cat));
+        UI.clear(list);
+        list.appendChild(h('div.card.flush', null, all.filter((i) => i.category === cat).map((ing) =>
+          h('div.row', { onClick: () => formStep(ing, null) }, [
+            h('div.row-ic', null, catIcon(ing.category)),
+            h('div.row-main', null, [h('strong', null, ing.name),
+              h('small', null, ing.price ? money(ing.price) + (ing.unit === 'piece' ? ' /pièce' : ' /kg') : 'prix non défini')]),
+            h('div.row-end', null, h('span.muted', null, '›'))
+          ]))));
+      };
+      const tabBar = h('div.chip-row', { style: 'margin-bottom:10px' }, present.map((cat) => {
+        const b = h('button.chip', { onClick: () => show(cat) }, CAT_LABEL[cat]);
+        tabs[cat] = b; return b;
+      }));
+      show(pickCat && present.includes(pickCat) ? pickCat : present[0]);
+      const body = h('div', null, [tabBar, list,
+        h('div.modal-actions', null, [h('button.btn.subtle', { onClick: mainStep }, '← Retour au panier')])]);
+      UI.modal({ title: 'Quel article ?', body });
+    }
+
+    /* --- Étape 3 : quantité + prix (au kilo OU total) + morceau --- */
+    function formStep(ing, line) {
+      const piece = ing.unit === 'piece';
+      const editing = !!line;
+      const d = {
+        qty: editing ? (piece ? line.qty : +(line.qty / 1000).toFixed(2)) : (piece ? 1 : ''),
+        ppk: editing ? (line.ppk || '') : (ing.price || ''),
+        total: editing ? (line.price || '') : '',
+        cut: editing ? (line.cut || '') : ''
+      };
+      const round2 = (n) => +n.toFixed(2);
+      const totalFromPpk = () => round2(piece ? (+d.ppk * +d.qty) : (+d.ppk * +d.qty));
+      const ppkFromTotal = () => round2(+d.total / +d.qty);
+
+      const qtyIn = h('input.input', { type: 'number', min: '0', step: piece ? '1' : '0.1', value: d.qty, placeholder: '0', onInput: (e) => { d.qty = e.target.value; sync('qty'); } });
+      const ppkIn = h('input.input', { type: 'number', min: '0', step: '0.01', value: d.ppk, placeholder: '0', onInput: (e) => { d.ppk = e.target.value; sync('ppk'); } });
+      const totalIn = h('input.input', { type: 'number', min: '0', step: '0.01', value: d.total, placeholder: '0', onInput: (e) => { d.total = e.target.value; sync('total'); } });
+      const echo = h('p.muted.small', { style: 'margin:8px 4px 0' });
+
+      function sync(changed) {
+        // le prix au kilo et le prix total se calculent l'un l'autre grâce au poids
+        if (+d.qty > 0) {
+          if (changed === 'total' && +d.total > 0) { d.ppk = ppkFromTotal(); ppkIn.value = d.ppk; }
+          else if (+d.ppk > 0) { d.total = totalFromPpk(); totalIn.value = d.total; }
+        }
+        echo.textContent = (+d.qty > 0 && !piece ? '= ' + Math.round(+d.qty * 1000) + ' g' : '') +
+          (+d.total > 0 && +d.qty > 0 ? (piece ? '' : '  ·  ') + money(+d.total) + ' au total' : '');
+      }
+      sync('init');
+
+      const cuttable = ['viande', 'abats'].includes(ing.category);
+      const body = h('div', null, [
+        h('datalist', { id: 'hatchi-cuts' }, CUTS.map((c) => h('option', { value: c }))),
+        h('div.field', null, [h('label', null, piece ? 'Nombre (pièces)' : 'Poids acheté (kg)'), qtyIn]),
+        h('div.grid2', null, [
+          h('div.field', null, [h('label', null, piece ? 'Prix à la pièce (€)' : 'Prix au kilo (€/kg)'), ppkIn]),
+          h('div.field', null, [h('label', null, 'Prix total payé (€)'), totalIn])
+        ]),
+        cuttable ? h('div.field', null, [h('label', null, 'Morceau (facultatif)'),
+          h('input.input', { placeholder: 'ex. cuisse, bavette, foie…', list: 'hatchi-cuts', value: d.cut, onInput: (e) => d.cut = e.target.value.trim() })]) : null,
+        echo,
+        h('div.modal-actions', null, [
+          h('button.btn.subtle', { onClick: () => (editing ? mainStep() : pickStep()) }, '← Retour'),
+          h('button.btn', { style: 'flex:2', onClick: () => {
+            const q = +d.qty;
+            if (!(q > 0)) { UI.toast(piece ? 'Indique le nombre' : 'Indique le poids en kg'); return; }
+            const data = { ing, qty: piece ? Math.round(q) : Math.round(q * 1000), cut: d.cut || '', ppk: +d.ppk || 0, price: +d.total || 0 };
+            if (editing) Object.assign(line, data); else basket.push(data);
+            mainStep();
+          } }, editing ? 'Enregistrer' : '✓ Ajouter au panier')
+        ])
+      ]);
+      UI.modal({ title: catIcon(ing.category) + ' ' + ing.name, body });
+    }
+
+    mainStep();
   }
 
   /* ---------- Copier la liste ---------- */
