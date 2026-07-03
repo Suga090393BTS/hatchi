@@ -29,10 +29,7 @@
     const base = ing ? ing.name : 'Ingrédient supprimé';
     return it.cut ? base + ' (' + it.cut + ')' : base;
   }
-  // Suggestions de morceaux (datalist)
-  const CUTS = ['filet', 'blanc', 'cuisse', 'haut de cuisse', 'pilon', 'aile', 'manchon', 'escalope',
-    'bavette', 'paleron', 'gîte', 'basse côte', 'collier', 'jarret', 'joue', 'macreuse', 'plat de côtes', 'tendron',
-    'épaule', 'gigot', 'côte', 'foie', 'cœur', 'rognons', 'gésier', 'poumon', 'rate', 'tripes'];
+  // Suggestions de morceaux : liste éditable dans Réglages, enrichie automatiquement par les achats
 
   Views.shopping = {
     render(root) {
@@ -343,7 +340,7 @@
 
       const cuttable = ['viande', 'abats'].includes(ing.category);
       const body = h('div', null, [
-        h('datalist', { id: 'hatchi-cuts' }, CUTS.map((c) => h('option', { value: c }))),
+        h('datalist', { id: 'hatchi-cuts' }, Store.cuts().map((c) => h('option', { value: c }))),
         h('div.field', null, [h('label', null, piece ? 'Nombre (pièces)' : 'Poids acheté (kg)'), qtyIn]),
         h('div.grid2', null, [
           h('div.field', null, [h('label', null, piece ? 'Prix à la pièce (€)' : 'Prix au kilo (€/kg)'), ppkIn]),

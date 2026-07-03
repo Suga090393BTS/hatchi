@@ -59,6 +59,13 @@
     ];
   }
 
+  // Morceaux proposés à la saisie d'un achat (viandes/abats). Modifiables dans Réglages.
+  function seedCuts() {
+    return ['filet', 'blanc', 'cuisse', 'haut de cuisse', 'pilon', 'aile', 'manchon', 'escalope',
+      'bavette', 'paleron', 'gîte', 'basse côte', 'collier', 'jarret', 'joue', 'macreuse', 'plat de côtes', 'tendron',
+      'épaule', 'gigot', 'côte', 'foie', 'cœur', 'rognons', 'gésier', 'poumon', 'rate', 'tripes'];
+  }
+
   // Personnes qui s'occupent du chien (repris du sheet HATCHI 2026). Modifiables.
   function seedPeople() {
     return ['Flo', 'Fanny', 'Alex', 'Noune'].map((n) => ({ id: uid(), name: n }));
@@ -87,7 +94,8 @@
       weights: [],               // [{id, date, kg}]
       stock: {},                 // ingredientId => quantité en stock (g ou pièces)
       people: seedPeople(),      // [{id, name}]
-      purchases: []              // [{id, date, items:[{ingredientId, qty}], cost}]
+      purchases: [],             // [{id, date, items:[{ingredientId, qty}], cost}]
+      cuts: seedCuts()           // morceaux suggérés (['cuisse', 'bavette', …])
     };
   }
 
@@ -168,6 +176,7 @@
     if (typeof s.stock !== 'object' || !s.stock) s.stock = {};
     if (!Array.isArray(s.people)) s.people = seedPeople();
     if (!Array.isArray(s.purchases)) s.purchases = [];
+    if (!Array.isArray(s.cuts)) s.cuts = seedCuts();
     // Onglet « Animaux entiers » : ajoute les articles par défaut aux données existantes
     if (!s.ingredients.some((i) => i.category === 'entier')) s.ingredients = s.ingredients.concat(base.ingredients.filter((i) => i.category === 'entier'));
     return s;
@@ -509,6 +518,22 @@
         .map((ing) => ({ ing, days: this.coverageDays(ing.id) }))
         .filter((x) => x.days !== Infinity && x.days < seuil);
     },
+    /* ---- Morceaux (suggestions pour les achats) ---- */
+    cuts: () => state.cuts.slice(),
+    hasCut(name) { return state.cuts.some((c) => c.toLowerCase() === (name || '').trim().toLowerCase()); },
+    addCut(name) {
+      name = (name || '').trim();
+      if (!name || this.hasCut(name)) return false;
+      commit((s) => s.cuts.push(name));
+      return true;
+    },
+    renameCut(oldName, newName) {
+      newName = (newName || '').trim();
+      if (!newName) return;
+      commit((s) => { const i = s.cuts.indexOf(oldName); if (i >= 0) s.cuts[i] = newName; });
+    },
+    removeCut(name) { commit((s) => { s.cuts = s.cuts.filter((c) => c !== name); }); },
+
     /* ---- Achats (ajoutent au stock) ---- */
     addPurchase({ date, items, cost }) {
       const clean = (items || []).filter((it) => it.ingredientId && it.qty > 0);
@@ -516,6 +541,11 @@
       const purchase = { id: uid(), date: date || todayISO(), items: clean.map((it) => { const o = { ingredientId: it.ingredientId, qty: it.qty }; if (it.cut) o.cut = it.cut; if (it.price) o.price = +it.price; return o; }), cost: cost ? +cost : 0 };
       commit((s) => {
         clean.forEach((it) => { s.stock[it.ingredientId] = (s.stock[it.ingredientId] || 0) + it.qty; });
+        // un morceau inconnu rejoint automatiquement la liste des suggestions
+        clean.forEach((it) => {
+          const cut = (it.cut || '').trim();
+          if (cut && !s.cuts.some((c) => c.toLowerCase() === cut.toLowerCase())) s.cuts.push(cut);
+        });
         s.purchases.push(purchase);
       });
       return purchase;

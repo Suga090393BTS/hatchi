@@ -58,6 +58,49 @@ create policy "hatchi_all" on public.hatchi_state
     UI.modal({ title: 'Ingrédients & prix', body });
   }
 
+  /* ---------- Morceaux (suggestions pour les achats) ---------- */
+  function openCutsList() {
+    const cuts = Store.cuts();
+    const card = h('div.card.flush');
+    if (!cuts.length) card.appendChild(h('div.empty', { style: 'padding:18px' }, 'Aucun morceau'));
+    cuts.forEach((c) => {
+      card.appendChild(h('div.row', null, [
+        h('div.row-ic', null, '🔪'),
+        h('div.row-main', null, h('strong', null, c)),
+        h('div.row-end', null, h('div.inline', { style: 'gap:4px' }, [
+          h('button.btn.ghost.icon', { onClick: () => { UI.closeModal(); setTimeout(() => openCutEditor(c), 50); } }, '✎'),
+          h('button.delete-x', { onClick: async () => {
+            if (await UI.confirm('Supprimer « ' + c + ' » des suggestions ?', { danger: true, ok: 'Supprimer' })) {
+              Store.removeCut(c); UI.closeModal(); setTimeout(openCutsList, 50);
+            }
+          } }, '✕')
+        ]))
+      ]));
+    });
+    const body = h('div', null, [
+      h('p.muted.small', { style: 'margin:0 0 10px' }, 'Suggestions proposées à la saisie d’un achat (viandes & abats). Un morceau inconnu saisi dans un achat s’ajoute automatiquement ici.'),
+      card,
+      h('button.btn.block', { style: 'margin-top:10px', onClick: () => { UI.closeModal(); setTimeout(() => openCutEditor(null), 50); } }, '+ Ajouter un morceau')
+    ]);
+    UI.modal({ title: 'Morceaux', body });
+  }
+  function openCutEditor(cut) {
+    let name = cut || '';
+    const body = h('div', null, [
+      h('div.field', null, [h('label', null, 'Nom du morceau'), h('input.input', { value: name, placeholder: 'Ex. bavette', onInput: (e) => name = e.target.value })]),
+      h('div.modal-actions', null, [
+        h('button.btn.subtle', { onClick: () => { UI.closeModal(); setTimeout(openCutsList, 50); } }, 'Annuler'),
+        h('button.btn', { onClick: () => {
+          if (!name.trim()) { UI.toast('Nom requis'); return; }
+          if (cut) Store.renameCut(cut, name);
+          else if (!Store.addCut(name)) { UI.toast('Ce morceau existe déjà'); return; }
+          UI.closeModal(); setTimeout(openCutsList, 50);
+        } }, 'Enregistrer')
+      ])
+    ]);
+    UI.modal({ title: cut ? 'Modifier le morceau' : 'Nouveau morceau', body });
+  }
+
   /* ---------- Sync ---------- */
   function syncCard() {
     const s = Store.get().settings;
@@ -141,6 +184,15 @@ create policy "hatchi_all" on public.hatchi_state
         h('div.inline', { style: 'justify-content:space-between' }, [
           h('div', null, [h('strong', null, Store.get().ingredients.length + ' ingrédients'), h('div.muted.small', null, 'Catalogue + prix pour le budget courses')]),
           h('button.btn.ghost.sm', { onClick: openIngredientsList }, 'Gérer')
+        ])
+      ]));
+
+      // Morceaux
+      root.appendChild(h('div.section-title', null, 'Morceaux (viandes & abats)'));
+      root.appendChild(h('div.card', null, [
+        h('div.inline', { style: 'justify-content:space-between' }, [
+          h('div', null, [h('strong', null, Store.cuts().length + ' morceaux'), h('div.muted.small', null, 'Suggestions à la saisie d’un achat')]),
+          h('button.btn.ghost.sm', { onClick: openCutsList }, 'Gérer')
         ])
       ]));
 
