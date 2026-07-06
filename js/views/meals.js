@@ -344,25 +344,6 @@
   function rotationView(root) {
     const cycleWeeks = Store.get().settings.cycleWeeks || 1;
 
-    // Proposition de rotation 4 semaines (toujours proposée ; remplace la rotation en place)
-    const rotationEmpty = !Object.keys(Store.get().rotation).some((k) => (Store.get().rotation[k] || []).length);
-    root.appendChild(h('div.card', { style: 'background:var(--green-100);border-color:#bfe0d4' }, [
-      h('div.inline', { style: 'gap:12px' }, [
-        h('span', { style: 'font-size:26px' }, '✨'),
-        h('div', { style: 'flex:1' }, [
-          h('strong', null, 'Rotation 4 semaines « bien-être »'),
-          h('div.small.muted', null, 'Protéines variées sur le mois, poisson 1×/semaine, abats et os répartis — aliments et doses de votre tableau HATCHI 2026. Modifiable ensuite, jour par jour.')
-        ])
-      ]),
-      h('button.btn.block', { style: 'margin-top:12px', onClick: async () => {
-        if (await UI.confirm(rotationEmpty
-          ? 'Charger la rotation 4 semaines ?'
-          : 'Charger la rotation 4 semaines ? Elle remplace la rotation actuelle.', { ok: 'Charger' })) {
-          Store.loadExampleRotation(); UI.toast('Rotation 4 semaines chargée ✓');
-        }
-      } }, '✨ Charger la rotation 4 semaines')
-    ]));
-
     // Sélecteur du nombre de semaines de cycle
     root.appendChild(h('div.card', null, [
       h('div.card-head', null, [h('h3', null, 'Cycle de rotation'),
@@ -372,29 +353,6 @@
       )),
       h('p.muted.small', { style: 'margin:10px 4px 0' }, 'L’app détermine automatiquement le repas du jour selon ce cycle et la date de départ (Réglages).')
     ]));
-
-    // Équilibre BARF de la semaine
-    const bal = Store.barfBalance('week');
-    if (bal.muscle + bal.abats > 0) {
-      const abatsOk = bal.abatsPct >= 8 && bal.abatsPct <= 15;
-      const osOk = bal.osPieces > 0;
-      root.appendChild(h('div.card', null, [
-        h('div.card-head', null, [h('h3', null, 'Équilibre de la semaine'), h('span.muted.small', null, UI.grams(bal.muscle + bal.abats) + ' viande')]),
-        h('div', { style: 'display:flex;height:14px;border-radius:99px;overflow:hidden;margin-bottom:8px' }, [
-          h('div', { style: `width:${bal.musclePct}%;background:var(--green)`, title: 'Muscle' }),
-          h('div', { style: `width:${bal.abatsPct}%;background:var(--amber)`, title: 'Abats' })
-        ]),
-        h('div.inline', { style: 'gap:14px;flex-wrap:wrap;font-size:12.5px' }, [
-          h('span.inline', { style: 'gap:5px' }, [h('i', { style: 'width:9px;height:9px;border-radius:2px;background:var(--green);display:inline-block' }), `Muscle ${bal.musclePct}%`]),
-          h('span.inline', { style: 'gap:5px' }, [h('i', { style: 'width:9px;height:9px;border-radius:2px;background:var(--amber);display:inline-block' }), `Abats ${bal.abatsPct}%`]),
-          bal.legume ? h('span.muted', null, '🥕 ' + UI.grams(bal.legume)) : null,
-          h('span', { class: osOk ? 'muted' : '', style: osOk ? '' : 'color:var(--red);font-weight:700' }, '🦴 ' + bal.osPieces + ' os')
-        ]),
-        h('p.muted.small', { style: 'margin:8px 4px 0' }, abatsOk && osOk
-          ? '✅ Bon équilibre (repère BARF : ~80 % muscle, ~10 % os, ~10 % abats).'
-          : (!abatsOk ? `⚠️ Abats à ~${bal.abatsPct}% (viser ~10%). ` : '') + (!osOk ? '⚠️ Pensez à inclure de l’os.' : ''))
-      ]));
-    }
 
     if (cycleWeeks > 1) {
       root.appendChild(h('div.seg', { style: 'margin:0 0 12px' },
@@ -413,6 +371,25 @@
         ])
       ]));
     }
+
+    // Compte-rendu : analyse du plan de la semaine affichée
+    const ra = Store.rotationAnalysis(editWeek);
+    const viande = ra.muscle + ra.abats;
+    root.appendChild(h('div.section-title', null, '🔎 Analyse du plan' + (cycleWeeks > 1 ? ' — semaine ' + editWeek : '')));
+    root.appendChild(h('div.card', null, [
+      h('div.card-head', null, [h('h3', null, 'Compte-rendu'), h('span.muted.small', null, ra.daysPlanned + ' jour' + (ra.daysPlanned > 1 ? 's' : '') + ' planifié' + (ra.daysPlanned > 1 ? 's' : ''))]),
+      viande > 0 ? h('div', { style: 'display:flex;height:12px;border-radius:99px;overflow:hidden;margin-bottom:8px' }, [
+        h('div', { style: `width:${100 - ra.abatsPct}%;background:var(--green)`, title: 'Muscle' }),
+        h('div', { style: `width:${ra.abatsPct}%;background:var(--amber)`, title: 'Abats' })
+      ]) : null,
+      viande > 0 ? h('div.inline', { style: 'gap:12px;flex-wrap:wrap;font-size:12.5px;margin-bottom:6px' }, [
+        h('span', null, '🥩 ' + UI.grams(ra.muscle)), h('span', null, '🫀 ' + ra.abatsPct + ' %'),
+        h('span', null, '🦴 ' + ra.osPieces + ' os'), h('span', null, '🥚 ' + ra.oeufs),
+        h('span', null, '🥕 ' + UI.grams(ra.legume)),
+        ra.proteins.length ? h('span.muted', null, ra.proteins.join(', ')) : null
+      ]) : null,
+      h('div', null, ra.advice.map((t) => h('p.small', { style: 'margin:5px 2px;line-height:1.4' }, t)))
+    ]));
   }
 
   Views.meals = {

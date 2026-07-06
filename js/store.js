@@ -1035,6 +1035,60 @@ Avion : cabine pour les petits gabarits (selon compagnie), sinon soute pressuris
       return acc;
     },
 
+    // Analyse d'une semaine du plan de rotation (prévision) : stats + conseils
+    rotationAnalysis(week) {
+      week = week || 1;
+      const acc = { muscle: 0, abats: 0, os: 0, legume: 0, autre: 0, osPieces: 0, oeufs: 0, grams: 0, daysPlanned: 0 };
+      const proteins = new Set(); let fish = false;
+      for (let d = 0; d < 7; d++) {
+        let dayHas = false;
+        ['matin', 'soir'].forEach((slot) => this.getRotation(week, d, slot).forEach((it) => {
+          const ing = this.ingredient(it.ingredientId);
+          if (!ing) return;
+          dayHas = true;
+          const cls = ing.category === 'entier' ? 'muscle' : barfClass(ing);
+          if (ing.unit === 'piece') {
+            if (cls === 'os') acc.osPieces += it.qty;
+            else if (ing.category === 'oeuf') acc.oeufs += it.qty;
+          } else { acc[cls] += it.qty; acc.grams += it.qty; }
+          if (cls === 'muscle' && ing.category !== 'oeuf' && ing.unit === 'g') proteins.add(ing.name.replace(/\s*\(.*\)\s*$/, ''));
+          if (/saumon|sardine|poisson|maquereau|truite/i.test(ing.name)) fish = true;
+        }));
+        if (dayHas) acc.daysPlanned++;
+      }
+      const viande = acc.muscle + acc.abats;
+      acc.abatsPct = viande ? Math.round(acc.abats / viande * 100) : 0;
+      acc.proteins = [...proteins];
+      acc.fish = fish;
+      acc.reco = this.recommendedRation();
+      acc.avgPerDay = acc.daysPlanned ? Math.round(acc.grams / acc.daysPlanned) : 0;
+
+      const advice = [];
+      if (!acc.daysPlanned) {
+        advice.push('Compose tes journées ci-dessus (matin/soir) pour obtenir l\'analyse du plan.');
+      } else {
+        if (acc.reco) {
+          if (acc.avgPerDay < acc.reco * 0.8) advice.push('⚠️ Plan léger : ~' + acc.avgPerDay + ' g/jour prévus pour ~' + acc.reco + ' g conseillés.');
+          else if (acc.avgPerDay > acc.reco * 1.25) advice.push('⚠️ Plan copieux : ~' + acc.avgPerDay + ' g/jour prévus pour ~' + acc.reco + ' g conseillés.');
+          else advice.push('✅ Quantités correctes : ~' + acc.avgPerDay + ' g/jour prévus (conseillé ~' + acc.reco + ' g).');
+        } else {
+          advice.push('⚖️ Ajoute une pesée (Soins → Poids) pour comparer le plan aux besoins.');
+        }
+        if (viande > 0 && !acc.abats) advice.push('🫀 Aucun abat prévu — viser ~10 % de la viande (vitamines A, fer, cuivre).');
+        else if (viande > 0 && acc.abatsPct < 8) advice.push('🫀 Abats à ~' + acc.abatsPct + ' % — viser ~10 %.');
+        else if (acc.abatsPct > 15) advice.push('🫀 Abats à ~' + acc.abatsPct + ' % — un peu beaucoup, viser ~10 %.');
+        else if (viande > 0) advice.push('✅ Abats à ~' + acc.abatsPct + ' % : bon ratio.');
+        if (!acc.osPieces && !acc.os) advice.push('🦴 Aucun os charnu prévu — calcium (2 à 3 os crus par semaine).');
+        else if (acc.osPieces === 1) advice.push('🦴 1 seul os prévu — viser 2 à 3 par semaine.');
+        else if (acc.osPieces) advice.push('✅ ' + acc.osPieces + ' os dans la semaine.');
+        if (acc.proteins.length === 1) advice.push('🔁 Une seule viande prévue (' + acc.proteins[0] + ') — varie sur la semaine ou le cycle.');
+        if (!acc.legume) advice.push('🥕 Aucun légume prévu.');
+        if (!acc.fish) advice.push('🐟 Pas de poisson prévu — 1×/semaine pour les oméga-3.');
+      }
+      acc.advice = advice;
+      return acc;
+    },
+
     /* ---- Rotation type 4 semaines (base : tableau « Ex S1 » du sheet HATCHI 2026) ----
        Bien-être : rotation des protéines sur le mois (poulet/dinde/bœuf/agneau/lapin/saumon/broutard),
        poisson 1×/semaine (oméga-3), abats 3×200 g et 3 os par semaine, légumes variés. */
