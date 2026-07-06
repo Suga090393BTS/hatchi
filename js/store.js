@@ -162,8 +162,39 @@
       const raw = localStorage.getItem(LS_KEY);
       if (raw) return migrate(JSON.parse(raw));
     } catch (e) { /* ignore */ }
-    return emptyState();
+    return migrate(emptyState());
   }
+  // Repas types du sheet HATCHI 2026 : 1 plat = 1 boudin = 400 g (2 à 3 boudins/jour).
+  // Crée les ingrédients « boudins » + les repas types s'ils n'existent pas déjà (par nom).
+  function ensureSheetMeals(s) {
+    const ingByName = {};
+    s.ingredients.forEach((i) => { ingByName[i.name.toLowerCase()] = i; });
+    const ensureIng = (name, cat) => {
+      let i = ingByName[name.toLowerCase()];
+      if (!i) { i = { id: uid(), name, category: cat, unit: 'g', price: 0 }; s.ingredients.push(i); ingByName[name.toLowerCase()] = i; }
+      return i;
+    };
+    const mealNames = new Set(s.meals.map((m) => (m.name || '').toLowerCase()));
+    const ensureMeal = (name, ing, qty) => {
+      if (!mealNames.has(name.toLowerCase())) s.meals.push({ id: uid(), name, items: [{ ingredientId: ing.id, qty }] });
+    };
+    const porc = ensureIng('Boudin porc', 'viande');
+    const poulet = ensureIng('Boudin poulet', 'viande');
+    const boeuf = ensureIng('Boudin bœuf', 'viande');
+    const canard = ensureIng('Boudin canard', 'viande');
+    const poisson = ensureIng('Boudin poisson', 'viande');
+    const patee = ensureIng('Pâtée', 'autre');
+    ensureMeal('Boudin porc (400 g)', porc, 400);
+    ensureMeal('Boudin poulet (400 g)', poulet, 400);
+    ensureMeal('Boudin bœuf (400 g)', boeuf, 400);
+    ensureMeal('Boudin canard (400 g)', canard, 400);
+    ensureMeal('Boudin poisson (400 g)', poisson, 400);
+    ensureMeal('Pâtée (400 g)', patee, 400);
+    ensureMeal('Moitié boudin poulet (200 g)', poulet, 200);
+    ensureMeal('Moitié boudin canard (200 g)', canard, 200);
+    ensureMeal('Moitié boudin porc (200 g)', porc, 200);
+  }
+
   function migrate(s) {
     const base = emptyState();
     s.settings = Object.assign({}, base.settings, s.settings || {});
@@ -179,6 +210,9 @@
     if (!Array.isArray(s.cuts)) s.cuts = seedCuts();
     // Onglet « Animaux entiers » : ajoute les articles par défaut aux données existantes
     if (!s.ingredients.some((i) => i.category === 'entier')) s.ingredients = s.ingredients.concat(base.ingredients.filter((i) => i.category === 'entier'));
+    // Repas types du sheet : créés une seule fois (supprimables ensuite sans qu'ils reviennent)
+    if (typeof s.seeded !== 'object' || !s.seeded) s.seeded = {};
+    if (!s.seeded.sheetMeals) { ensureSheetMeals(s); s.seeded.sheetMeals = true; }
     return s;
   }
 
