@@ -7,7 +7,7 @@
   const { h, grams } = UI;
   const { DAYS_SHORT } = UI;
 
-  let tab = 'rotation'; // 'rotation' | 'types'
+  let tab = 'donnes'; // 'donnes' | 'rotation' | 'types'
   let typesSlot = 'matin'; // onglet actif dans Repas-types : 'matin' | 'soir'
   const mealSlot = (m) => m.slot || 'matin';
 
@@ -27,11 +27,8 @@
     return st > 0 ? (i.unit === 'piece' ? '×' + st : UI.grams(st)) + ' en stock' : 'épuisé';
   };
 
-  function openMealEditor(meal, preset) {
-    const isNew = !meal;
-    let draft = meal ? JSON.parse(JSON.stringify(meal)) : Object.assign({ name: '', slot: typesSlot, items: [] }, preset || {});
-    if (!draft.slot) draft.slot = 'matin';
-
+  // Éditeur d'ingrédients partagé (repas-types & repas donnés) : seul le stock est proposé
+  function itemsEditor(draft) {
     const itemsBox = h('div');
     function renderItems() {
       UI.clear(itemsBox);
@@ -55,8 +52,6 @@
       });
     }
     renderItems();
-
-    // Boutons d'ajout par catégorie — uniquement ce qui est en stock
     const addBtn = (cat, defQty) => h('button.btn.ghost.sm', { onClick: () => {
       const opts = Store.get().ingredients.filter((i) => i.category === cat && Store.stockOf(i.id) > 0);
       if (!opts.length) { UI.toast('Rien en stock dans « ' + CAT_LABEL[cat] + ' » — fais des courses d\'abord'); return; }
@@ -64,6 +59,19 @@
       draft.items.push({ ingredientId: first.id, qty: first.unit === 'piece' ? 1 : Math.min(defQty, Store.stockOf(first.id)) });
       renderItems();
     } }, '+ ' + CAT_LABEL[cat]);
+    return h('div', null, [
+      itemsBox,
+      h('div.inline', { style: 'flex-wrap:wrap;gap:6px' }, [
+        addBtn('viande', 500), addBtn('legume', 100), addBtn('abats', 200),
+        addBtn('oeuf', 1), addBtn('os', 1), addBtn('autre', 100)
+      ])
+    ]);
+  }
+
+  function openMealEditor(meal, preset) {
+    const isNew = !meal;
+    let draft = meal ? JSON.parse(JSON.stringify(meal)) : Object.assign({ name: '', slot: typesSlot, items: [] }, preset || {});
+    if (!draft.slot) draft.slot = 'matin';
 
     const slotSeg = h('div.seg', null, [['matin', '🌅 Matin'], ['soir', '🌙 Soir']].map(([v, l]) =>
       h('button', { class: draft.slot === v ? 'on' : '', onClick: (e) => {
@@ -78,11 +86,7 @@
       h('div.field', null, [h('label', null, 'Repas du…'), slotSeg]),
       h('div.field', null, [
         h('label', null, 'Ingrédients & quantités (selon le stock)'),
-        itemsBox,
-        h('div.inline', { style: 'flex-wrap:wrap;gap:6px' }, [
-          addBtn('viande', 500), addBtn('legume', 100), addBtn('abats', 200),
-          addBtn('oeuf', 1), addBtn('os', 1), addBtn('autre', 100)
-        ])
+        itemsEditor(draft)
       ]),
       h('div.modal-actions', null, [
         !isNew ? h('button.btn.danger', { onClick: async () => {
@@ -120,6 +124,145 @@
       if (sug.error) { UI.toast(sug.error); return; }
       openMealEditor(null, sug);
     } }, '✨ Composer un repas du ' + typesSlot + ' selon le stock'));
+  }
+
+  /* ---------- Repas réellement donnés ---------- */
+  function showBilan() {
+    const dog = Store.get().settings.dogName || 'Hatchi';
+    const a = Store.fedAnalysis(7);
+    const today = Store.fedGramsForDay(Store.todayISO());
+    const body = h('div', null, [
+      h('div.inline', { style: 'justify-content:space-between;margin-bottom:10px' }, [
+        h('div', null, [h('div.muted.small', null, 'Donné aujourd\'hui'),
+          h('div', { style: 'font-size:22px;font-weight:800;color:var(--green-700)' }, UI.grams(today) + (a.reco ? ' / ~' + UI.grams(a.reco) : ''))]),
+        h('div', { style: 'text-align:right' }, [h('div.muted.small', null, '7 derniers jours'), h('strong', null, a.avgPerDay ? '~' + a.avgPerDay + ' g/j' : '—')])
+      ]),
+      h('div', null, a.advice.map((t) => h('p', { style: 'margin:6px 2px;font-size:14px;line-height:1.45' }, t))),
+      h('div.modal-actions', null, h('button.btn', { style: 'flex:1', onClick: () => UI.closeModal() }, 'OK'))
+    ]);
+    UI.modal({ title: '✨ Bilan de ' + dog, body });
+  }
+
+  // Éditeur « ce que j'ai vraiment donné » (peut différer de la rotation)
+  function openFedEditor(existing, opts) {
+    opts = opts || {};
+    let draft = existing
+      ? JSON.parse(JSON.stringify(existing))
+      : { date: opts.date || Store.todayISO(), slot: opts.slot || 'matin', items: JSON.parse(JSON.stringify(opts.presetItems || [])) };
+    const slotSeg = h('div.seg', null, [['matin', '🌅 Matin'], ['soir', '🌙 Soir']].map(([v, l]) =>
+      h('button', { class: draft.slot === v ? 'on' : '', onClick: (e) => {
+        draft.slot = v;
+        [...slotSeg.children].forEach((b) => b.classList.toggle('on', b === e.currentTarget));
+      } }, l)));
+    const body = h('div', null, [
+      h('div.grid2', null, [
+        h('div.field', null, [h('label', null, 'Date'), h('input.input', { type: 'date', value: draft.date, max: Store.todayISO(), onChange: (e) => draft.date = e.target.value })]),
+        h('div.field', null, [h('label', null, 'Repas du…'), slotSeg])
+      ]),
+      h('div.field', null, [h('label', null, 'Ce que j\'ai donné (selon le stock)'), itemsEditor(draft)]),
+      h('div.modal-actions', null, [
+        existing ? h('button.btn.danger', { onClick: async () => {
+          if (await UI.confirm('Supprimer ce repas ? (le stock est réintégré)', { danger: true, ok: 'Supprimer' })) { Store.removeFed(existing.id); UI.closeModal(); }
+        } }, '🗑') : h('button.btn.subtle', { onClick: () => UI.closeModal() }, 'Annuler'),
+        h('button.btn', { style: 'flex:2', onClick: () => {
+          if (!draft.items.filter((it) => it.ingredientId && it.qty > 0).length) { UI.toast('Ajoute au moins un ingrédient'); return; }
+          if (existing) Store.removeFed(existing.id); // édition = on remplace (stock réajusté)
+          Store.logFed(draft);
+          UI.closeModal();
+          setTimeout(showBilan, 150);
+        } }, 'Enregistrer')
+      ])
+    ]);
+    UI.modal({ title: existing ? 'Modifier le repas donné' : '🍽 Repas donné', body });
+  }
+  Views.openFedEditor = openFedEditor; // utilisé par l'écran Aujourd'hui
+
+  // Graphique : grammes donnés par jour (14 j) + ligne de la ration conseillée
+  function fedChart(a) {
+    const W = 320, H = 150, pad = { l: 34, r: 8, t: 14, b: 20 };
+    const days = a.dates;
+    const vals = days.map((d) => a.gramsByDay[d] || 0);
+    const top = Math.max(a.reco || 0, Math.max.apply(null, vals), 100) * 1.15;
+    const bw = (W - pad.l - pad.r) / days.length;
+    const py = (v) => pad.t + (1 - v / top) * (H - pad.t - pad.b);
+    const NS = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(NS, 'svg');
+    svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+    const el = (n, attrs, txt) => { const x = document.createElementNS(NS, n); for (const k in attrs) x.setAttribute(k, attrs[k]); if (txt != null) x.textContent = txt; return x; };
+    vals.forEach((v, i) => {
+      if (!v) return;
+      const x = pad.l + i * bw + bw * 0.15;
+      const ok = !a.reco || (v >= a.reco * 0.8 && v <= a.reco * 1.25);
+      svg.appendChild(el('rect', { x, y: py(v), width: bw * 0.7, height: (H - pad.b) - py(v), rx: 3, fill: ok ? '#1f6f5c' : '#c98a2b' }));
+    });
+    if (a.reco) {
+      svg.appendChild(el('line', { x1: pad.l, y1: py(a.reco), x2: W - pad.r, y2: py(a.reco), stroke: '#a33b2e', 'stroke-width': 1.5, 'stroke-dasharray': '5 4' }));
+      svg.appendChild(el('text', { x: 2, y: py(a.reco) + 4, 'font-size': 9, fill: '#a33b2e' }, a.reco + ' g'));
+    }
+    days.forEach((d, i) => {
+      if (i % 2) return;
+      svg.appendChild(el('text', { x: pad.l + i * bw + bw / 2, y: H - 6, 'font-size': 8.5, fill: '#5d6b66', 'text-anchor': 'middle' }, +d.slice(8)));
+    });
+    return h('div.chart-wrap', null, svg);
+  }
+
+  function fedSummary(e) {
+    return e.items.map((it) => {
+      const ing = Store.ingredient(it.ingredientId);
+      return ing ? ing.name + ' ' + (ing.unit === 'piece' ? '×' + it.qty : grams(it.qty)) : null;
+    }).filter(Boolean).join(' · ');
+  }
+
+  function donnesView(root) {
+    const a = Store.fedAnalysis(7);
+    // Bilan « agent »
+    root.appendChild(h('div.card', null, [
+      h('div.card-head', null, [h('h3', null, '✨ Bilan (7 derniers jours)'), h('span.muted.small', null, a.nDays + ' jour' + (a.nDays > 1 ? 's' : '') + ' noté' + (a.nDays > 1 ? 's' : ''))]),
+      (a.muscle + a.abats) > 0 ? h('div', { style: 'display:flex;height:12px;border-radius:99px;overflow:hidden;margin-bottom:8px' }, [
+        h('div', { style: `width:${100 - a.abatsPct}%;background:var(--green)` }),
+        h('div', { style: `width:${a.abatsPct}%;background:var(--amber)` })
+      ]) : null,
+      (a.muscle + a.abats) > 0 ? h('div.inline', { style: 'gap:12px;flex-wrap:wrap;font-size:12.5px;margin-bottom:6px' }, [
+        h('span', null, '🥩 ' + UI.grams(a.muscle)), h('span', null, '🫀 ' + a.abatsPct + ' %'),
+        h('span', null, '🦴 ' + a.osPieces + ' os'), h('span', null, '🥚 ' + a.oeufs),
+        h('span', null, '🥕 ' + UI.grams(a.legume)),
+        a.proteins.length ? h('span.muted', null, a.proteins.join(', ')) : null
+      ]) : null,
+      h('div', null, a.advice.map((t) => h('p.small', { style: 'margin:5px 2px;line-height:1.4' }, t)))
+    ]));
+
+    // Graphique sur 14 jours
+    const a14 = Store.fedAnalysis(14);
+    if (a14.grams > 0) {
+      root.appendChild(h('div.card', null, [
+        h('div.card-head', null, [h('h3', null, 'Quantités par jour'), h('span.muted.small', null, '14 jours')]),
+        fedChart(a14)
+      ]));
+    }
+
+    root.appendChild(h('button.btn.block', { style: 'margin:8px 0', onClick: () => openFedEditor(null, {}) }, '+ Noter un repas donné'));
+
+    // Historique groupé par jour
+    const entries = Store.fedSorted();
+    if (!entries.length) {
+      root.appendChild(h('div.card', null, UI.emptyState('🍽', 'Aucun repas noté', 'Sur « Aujourd\'hui », appuie sur « 🍽 J\'ai donné… » pour noter ce que Hatchi mange vraiment.')));
+      return;
+    }
+    let curDate = null;
+    let card = null;
+    entries.forEach((e) => {
+      if (e.date !== curDate) {
+        curDate = e.date;
+        root.appendChild(h('div.section-title', null, UI.fmtLong(e.date) + ' — ' + UI.grams(Store.fedGramsForDay(e.date))));
+        card = h('div.card.flush');
+        root.appendChild(card);
+      }
+      card.appendChild(h('div.row', { onClick: () => openFedEditor(e) }, [
+        h('div.row-ic', null, e.slot === 'soir' ? '🌙' : '🌅'),
+        h('div.row-main', null, [h('strong', null, e.slot === 'soir' ? 'Soir' : 'Matin'), h('small', null, fedSummary(e))]),
+        h('div.row-end', null, h('span.muted', null, '›'))
+      ]));
+    });
   }
 
   /* ---------- Rotation ---------- */
@@ -244,11 +387,14 @@
 
   Views.meals = {
     render(root) {
-      root.appendChild(h('div.seg', { style: 'margin-bottom:14px' }, [
+      root.appendChild(h('div.seg', { style: 'margin-bottom:14px;flex-wrap:wrap;justify-content:center' }, [
+        h('button', { class: tab === 'donnes' ? 'on' : '', onClick: () => { tab = 'donnes'; App.rerender(); } }, '🍽 Donnés'),
         h('button', { class: tab === 'rotation' ? 'on' : '', onClick: () => { tab = 'rotation'; App.rerender(); } }, 'Rotation'),
         h('button', { class: tab === 'types' ? 'on' : '', onClick: () => { tab = 'types'; App.rerender(); } }, 'Repas-types')
       ]));
-      if (tab === 'rotation') rotationView(root); else typesView(root);
+      if (tab === 'donnes') donnesView(root);
+      else if (tab === 'rotation') rotationView(root);
+      else typesView(root);
     }
   };
 })();

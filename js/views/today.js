@@ -28,24 +28,37 @@
     return lines;
   }
 
+  function fedLines(e) {
+    return e.items.map((it) => {
+      const ing = Store.ingredient(it.ingredientId);
+      if (!ing) return null;
+      return h('div.meal-line', null, [
+        h('span', null, ing.name),
+        h('span.q', null, ing.unit === 'piece' ? `×${it.qty}` : grams(it.qty))
+      ]);
+    }).filter(Boolean);
+  }
+
   function mealSlot(slot, label, ic, iso) {
-    const meals = Store.mealsForDay(iso, slot);
+    const planned = Store.mealsForDay(iso, slot);
+    const fed = Store.fedForSlot(iso, slot);
     const entry = Store.dayEntry(iso);
-    const doneKey = slot === 'matin' ? 'repasMatin' : 'repasSoir';
-    const done = !!entry[doneKey];
-    const hasMeals = meals.length > 0;
+    const done = !!fed || !!entry[slot === 'matin' ? 'repasMatin' : 'repasSoir'];
+    // le prévu de la rotation sert de pré-remplissage — modifiable librement à la saisie
+    const presetItems = [];
+    planned.forEach((m) => (m.items || []).forEach((it) => presetItems.push({ ingredientId: it.ingredientId, qty: it.qty })));
 
     return h('div', { class: 'meal-slot' + (done ? ' done' : '') }, [
       h('div.slot-label', null, [h('span', null, ic), h('span', null, label),
         done ? h('span.badge.ok', { style: 'margin-left:auto' }, '✓ donné') : null]),
       h('div.slot-body', null,
-        hasMeals ? mealLines(meals)
-                 : h('div.muted.small', null, 'Aucun repas planifié')),
-      h('button', {
-        class: 'btn sm ' + (done ? 'subtle' : 'ghost'),
-        style: 'margin-top:12px;width:100%',
-        onClick: () => Store.setMealGiven(iso, slot, !done)
-      }, done ? 'Annuler' : 'Marquer comme donné')
+        fed ? fedLines(fed)
+            : planned.length
+              ? [h('div.muted.small', { style: 'margin-bottom:4px' }, 'Suggestion (rotation) :')].concat(mealLines(planned))
+              : h('div.muted.small', null, 'Note ce que tu donnes, même sans planification.')),
+      fed
+        ? h('button.btn.sm.subtle', { style: 'margin-top:12px;width:100%', onClick: () => Views.openFedEditor(fed) }, 'Modifier ce qui a été donné')
+        : h('button.btn.sm', { style: 'margin-top:12px;width:100%', onClick: () => Views.openFedEditor(null, { date: iso, slot, presetItems }) }, '🍽 J\'ai donné…')
     ]);
   }
 
@@ -181,19 +194,22 @@
         h('button.btn.ghost.sm', { onClick: () => App.go('treatments') }, 'Peser')
       ]));
     }
-    const pct = reco ? Math.min(140, Math.round(planned / reco * 100)) : 0;
-    const diff = planned - reco;
-    const okColor = Math.abs(diff) <= reco * 0.1 ? 'var(--ok)' : (planned < reco ? 'var(--amber)' : 'var(--red)');
-    const msg = Math.abs(diff) <= reco * 0.1 ? 'Équilibré' : (planned < reco ? `${Math.abs(diff)} g en moins` : `${diff} g en plus`);
+    const given = Store.fedGramsForDay(iso);
+    const shown = given || planned; // priorité au réellement donné
+    const label = given ? 'Donné' : 'Planifié';
+    const pct = reco ? Math.min(140, Math.round(shown / reco * 100)) : 0;
+    const diff = shown - reco;
+    const okColor = Math.abs(diff) <= reco * 0.1 ? 'var(--ok)' : (shown < reco ? 'var(--amber)' : 'var(--red)');
+    const msg = Math.abs(diff) <= reco * 0.1 ? 'Équilibré' : (shown < reco ? `${Math.abs(diff)} g en moins` : `${diff} g en plus`);
     return h('div.card', null, [
       h('div.inline', { style: 'justify-content:space-between;margin-bottom:8px' }, [
         h('div', null, [h('div.muted.small', null, 'Ration conseillée (' + (Store.get().settings.rationPct || 2.5) + ' % du poids)'),
           h('div', { style: 'font-size:20px;font-weight:800;color:var(--green-700)' }, UI.grams(reco) + ' / jour')]),
-        h('div', { style: 'text-align:right' }, [h('div.muted.small', null, 'Planifié'), h('strong', { style: 'font-size:18px' }, UI.grams(planned))])
+        h('div', { style: 'text-align:right' }, [h('div.muted.small', null, label), h('strong', { style: 'font-size:18px' }, UI.grams(shown))])
       ]),
       h('div', { style: 'height:8px;background:var(--sand);border-radius:99px;overflow:hidden' },
         h('div', { style: `height:100%;width:${pct}%;background:${okColor};border-radius:99px;transition:width .3s` })),
-      h('div.small', { style: `margin-top:6px;color:${okColor};font-weight:700` }, msg + (planned ? '' : ' (les pièces œuf/os ne sont pas comptées en grammes)'))
+      h('div.small', { style: `margin-top:6px;color:${okColor};font-weight:700` }, msg + (shown ? '' : ' (les pièces œuf/os ne sont pas comptées en grammes)'))
     ]);
   }
 

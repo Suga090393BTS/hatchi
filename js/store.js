@@ -144,6 +144,7 @@ Avion : cabine pour les petits gabarits (selon compagnie), sinon soute pressuris
       people: seedPeople(),      // [{id, name}]
       purchases: [],             // [{id, date, items:[{ingredientId, qty}], cost}]
       cuts: seedCuts(),          // morceaux suggérés (['cuisse', 'bavette', …])
+      fed: [],                   // repas réellement donnés : [{id, date, slot, items:[{ingredientId, qty}]}]
       identity: { chipNumber: '', chipPhoto: '', identDate: '', identVet: '', prevOwner: '', prevVet: '' }, // puce, véto identificateur, ancien détenteur/véto
       vetCurrent: { name: '', phone: '', address: '' },  // vétérinaire actuel
       documents: [],             // papiers du chien : [{id, name, mime, size, dataURL, addedAt}]
@@ -277,6 +278,7 @@ Avion : cabine pour les petits gabarits (selon compagnie), sinon soute pressuris
     if (!Array.isArray(s.people)) s.people = seedPeople();
     if (!Array.isArray(s.purchases)) s.purchases = [];
     if (!Array.isArray(s.cuts)) s.cuts = seedCuts();
+    if (!Array.isArray(s.fed)) s.fed = [];
     s.identity = Object.assign({}, base.identity, s.identity || {});
     s.vetCurrent = Object.assign({}, base.vetCurrent, s.vetCurrent || {});
     if (!Array.isArray(s.documents)) s.documents = [];
@@ -747,6 +749,113 @@ Avion : cabine pour les petits gabarits (selon compagnie), sinon soute pressuris
     spentInMonth(yearMonth) { // 'YYYY-MM' ; défaut = mois courant
       const ym = yearMonth || todayISO().slice(0, 7);
       return state.purchases.filter((p) => p.date.slice(0, 7) === ym).reduce((sum, p) => sum + (p.cost || 0), 0);
+    },
+
+    /* ---- Repas réellement donnés (journal alimentaire) ---- */
+    // Enregistre ce qui a VRAIMENT été donné (peut différer de la rotation) : déduit le stock, coche le journal
+    logFed({ date, slot, items }) {
+      const clean = (items || []).filter((it) => it.ingredientId && it.qty > 0);
+      if (!clean.length) return null;
+      const entry = { id: uid(), date: date || todayISO(), slot: slot || 'matin', items: clean.map((it) => ({ ingredientId: it.ingredientId, qty: +it.qty })) };
+      commit((s) => {
+        entry.items.forEach((it) => { s.stock[it.ingredientId] = Math.max(0, (s.stock[it.ingredientId] || 0) - it.qty); });
+        s.fed.push(entry);
+        const day = s.journal[entry.date] || { sorties: {}, soins: [] };
+        if (entry.slot === 'matin') day.repasMatin = true;
+        if (entry.slot === 'soir') day.repasSoir = true;
+        s.journal[entry.date] = day;
+      });
+      return entry;
+    },
+    // Supprime une entrée (réintègre le stock, décoche le journal si plus rien sur le créneau)
+    removeFed(id) {
+      commit((s) => {
+        const e = s.fed.find((x) => x.id === id);
+        if (!e) return;
+        e.items.forEach((it) => { s.stock[it.ingredientId] = (s.stock[it.ingredientId] || 0) + it.qty; });
+        s.fed = s.fed.filter((x) => x.id !== id);
+        const others = s.fed.some((x) => x.date === e.date && x.slot === e.slot);
+        if (!others && s.journal[e.date]) {
+          if (e.slot === 'matin') s.journal[e.date].repasMatin = false;
+          if (e.slot === 'soir') s.journal[e.date].repasSoir = false;
+        }
+      });
+    },
+    fedForDay(date) { return state.fed.filter((e) => e.date === date); },
+    fedForSlot(date, slot) { return state.fed.find((e) => e.date === date && e.slot === slot) || null; },
+    fedGramsForDay(date) {
+      let g = 0;
+      this.fedForDay(date).forEach((e) => e.items.forEach((it) => {
+        const ing = this.ingredient(it.ingredientId);
+        if (ing && ing.unit === 'g') g += it.qty;
+      }));
+      return g;
+    },
+    fedSorted() { return state.fed.slice().sort((a, b) => b.date.localeCompare(a.date) || (a.slot === 'soir' ? 1 : -1) - (b.slot === 'soir' ? 1 : -1)); },
+
+    // Bilan « agent » sur les N derniers jours : stats + conseils sur ce qui a réellement été donné
+    fedAnalysis(days) {
+      days = days || 7;
+      const dates = [];
+      const baseDate = new Date(todayISO() + 'T00:00:00');
+      for (let i = 0; i < days; i++) { const d = new Date(baseDate); d.setDate(d.getDate() - i); dates.push(isoLocal(d)); }
+      const inWindow = new Set(dates);
+      const acc = { muscle: 0, abats: 0, os: 0, legume: 0, autre: 0, osPieces: 0, oeufs: 0, grams: 0,
+        gramsByDay: {}, dates: dates.slice().reverse(), fish: false, entries: 0 };
+      const proteins = new Set(); const daysWithFood = new Set();
+      state.fed.forEach((e) => {
+        if (!inWindow.has(e.date)) return;
+        acc.entries++;
+        e.items.forEach((it) => {
+          const ing = state.ingredients.find((i) => i.id === it.ingredientId);
+          if (!ing) return;
+          daysWithFood.add(e.date);
+          const cls = ing.category === 'entier' ? 'muscle' : barfClass(ing);
+          if (ing.unit === 'piece') {
+            if (cls === 'os') acc.osPieces += it.qty;
+            else if (ing.category === 'oeuf') acc.oeufs += it.qty;
+          } else {
+            acc[cls] = (acc[cls] || 0) + it.qty;
+            acc.grams += it.qty;
+            acc.gramsByDay[e.date] = (acc.gramsByDay[e.date] || 0) + it.qty;
+          }
+          if (cls === 'muscle' && ing.category !== 'oeuf' && ing.unit === 'g') proteins.add(ing.name.replace(/\s*\(.*\)\s*$/, ''));
+          if (/saumon|sardine|poisson|maquereau|truite/i.test(ing.name)) acc.fish = true;
+        });
+      });
+      const viande = acc.muscle + acc.abats;
+      acc.abatsPct = viande ? Math.round(acc.abats / viande * 100) : 0;
+      acc.nDays = daysWithFood.size;
+      acc.reco = this.recommendedRation();
+      acc.proteins = [...proteins];
+      acc.avgPerDay = acc.nDays ? Math.round(acc.grams / acc.nDays) : 0;
+
+      const advice = [];
+      if (!acc.entries) {
+        advice.push('Note les repas donnés (bouton « J\'ai donné… » sur Aujourd\'hui) pour obtenir un bilan.');
+      } else {
+        if (acc.reco && acc.nDays >= 1) {
+          if (acc.avgPerDay < acc.reco * 0.8) advice.push('⚠️ Petites rations : ~' + acc.avgPerDay + ' g/jour donnés, ~' + acc.reco + ' g conseillés — Hatchi mange peu.');
+          else if (acc.avgPerDay > acc.reco * 1.25) advice.push('⚠️ Rations copieuses : ~' + acc.avgPerDay + ' g/jour donnés, ~' + acc.reco + ' g conseillés.');
+          else advice.push('✅ Bonnes quantités : ~' + acc.avgPerDay + ' g/jour (conseillé ~' + acc.reco + ' g).');
+        } else if (!acc.reco) {
+          advice.push('⚖️ Ajoute une pesée (Soins → Poids) pour comparer aux quantités conseillées.');
+        }
+        if (acc.nDays >= 3) {
+          if (viande > 0 && !acc.abats) advice.push('🫀 Aucun abat sur ' + acc.nDays + ' jours — il manque les vitamines (A, fer, cuivre). Viser ~10 % de la viande.');
+          else if (viande > 0 && acc.abatsPct < 8) advice.push('🫀 Abats à ~' + acc.abatsPct + ' % seulement — viser ~10 % pour les vitamines.');
+          else if (acc.abatsPct > 15) advice.push('🫀 Beaucoup d\'abats (~' + acc.abatsPct + ' %) — risque de selles molles, viser ~10 %.');
+          if (!acc.osPieces && !acc.os) advice.push('🦴 Aucun os charnu sur ' + acc.nDays + ' jours — il manque le calcium (2-3 os crus par semaine).');
+          if (acc.proteins.length === 1) advice.push('🔁 Une seule viande (' + acc.proteins[0] + ') — varie les protéines dès que possible.');
+          if (!acc.legume) advice.push('🥕 Aucun légume — fibres et vitamines en plus.');
+          if (!acc.fish && days >= 7) advice.push('🐟 Pas de poisson sur la période — pense aux oméga-3 (1×/semaine).');
+          if (advice.every((a) => a.startsWith('✅'))) advice.push('🌟 Alimentation équilibrée — continue comme ça !');
+        } else {
+          advice.push('Encore ' + (3 - acc.nDays) + ' jour(s) de notes et le bilan complet s\'affichera.');
+        }
+      }
+      acc.advice = advice;
+      return acc;
     },
 
     // Marquer un repas donné + déduire/réintégrer le stock (idempotent)
