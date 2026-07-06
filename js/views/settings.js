@@ -217,7 +217,23 @@ create policy "hatchi_all" on public.hatchi_state
         } }, 'Réinitialiser l’application')
       ]));
 
-      root.appendChild(h('p.muted.small.center', { style: 'margin-top:18px' }, 'Hatchi · données stockées sur votre appareil' + (s.supabaseUrl ? ' + Supabase' : '')));
+      // Mise à jour
+      root.appendChild(h('div.section-title', null, 'Mise à jour'));
+      root.appendChild(h('div.card', null, [
+        h('p.muted.small', { style: 'margin:0 0 10px' }, 'Si l’app semble en retard sur une nouveauté, forcez la mise à jour (les données ne sont pas touchées).'),
+        h('button.btn.subtle.block', { onClick: () => { location.href = 'maj.html'; } }, '🔄 Forcer la mise à jour')
+      ]));
+
+      const footer = h('p.muted.small.center', { style: 'margin-top:18px' }, 'Hatchi · données stockées sur votre appareil' + (s.supabaseUrl ? ' + Supabase' : ''));
+      // Affiche la version réellement chargée (nom du cache du service worker)
+      if (window.caches) {
+        caches.keys().then((keys) => {
+          const nums = keys.map((k) => { const m = k.match(/^hatchi-v(\d+)$/); return m ? +m[1] : 0; });
+          const v = Math.max.apply(null, nums.concat(0));
+          if (v) footer.textContent += ' · version v' + v;
+        }).catch(() => {});
+      }
+      root.appendChild(footer);
     }
   };
 
