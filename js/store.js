@@ -184,26 +184,30 @@
     const AB = (q) => it('Abats (lot)', 'abats', 'g', q);
     const mealByName = {};
     s.meals.forEach((m) => { mealByName[(m.name || '').toLowerCase()] = m.id; });
-    const meal = (name, items) => {
+    const meal = (name, slot, items) => {
       const k = name.toLowerCase();
-      if (!mealByName[k]) { const m = { id: uid(), name, items }; s.meals.push(m); mealByName[k] = m.id; }
+      if (!mealByName[k]) { const m = { id: uid(), name, slot, items }; s.meals.push(m); mealByName[k] = m.id; }
       return mealByName[k];
     };
     return {
-      pouletOeufCarotte:     meal('Poulet + œuf + carotte (matin)', [V('Poulet (filet)', 500), OEUF(), L('Carotte', 200)]),
-      pouletCarotte:         meal('Poulet + carotte (matin)', [V('Poulet (filet)', 500), L('Carotte', 100)]),
-      dindeCourgette:        meal('Dinde + courgette (matin)', [V('Dinde', 500), L('Courgette', 100)]),
-      pouletOsHaricots:      meal('Poulet + os + haricots verts (matin)', [V('Poulet (filet)', 500), OS(), L('Haricot vert', 100)]),
-      dindeBrocoli:          meal('Dinde + brocoli (matin)', [V('Dinde', 500), L('Brocoli', 100)]),
-      pouletEpinards:        meal('Poulet + épinards (matin)', [V('Poulet (filet)', 500), L('Épinard', 100)]),
-      dindeOsCourgette:      meal('Dinde + os + courgette (matin)', [V('Dinde', 500), OS(), L('Courgette', 100)]),
-      dindeAbatsBrocoli:     meal('Dinde + abats + brocoli (soir)', [V('Dinde', 300), AB(200), L('Brocoli', 100)]),
-      boeufOsOeufHaricots:   meal('Bœuf + os + œuf + haricots verts (soir)', [V('Bœuf', 400), OS(), OEUF(), L('Haricot vert', 100)]),
-      boeufAbatsPotiron:     meal('Bœuf + abats + potiron (soir)', [V('Bœuf', 300), AB(200), L('Potiron', 100)]),
-      agneauOeufCourgette:   meal('Agneau + œuf + courgette (soir)', [V('Agneau', 400), OEUF(), L('Courgette', 100)]),
-      agneauOeufCarotte:     meal('Agneau + œuf + carotte (soir)', [V('Agneau', 500), OEUF(), L('Carotte', 100)]),
-      pouletAbatsPetitsPois: meal('Poulet + abats + petits pois (soir)', [V('Poulet (filet)', 500), AB(200), L('Petit pois', 100)]),
-      boeufOeufPatateDouce:  meal('Bœuf + œuf + patate douce (soir)', [V('Bœuf', 400), OEUF(), L('Patate douce', 100)])
+      pouletOeufCarotte:     meal('Poulet + œuf + carotte', 'matin', [V('Poulet (filet)', 500), OEUF(), L('Carotte', 200)]),
+      pouletCarotte:         meal('Poulet + carotte', 'matin', [V('Poulet (filet)', 500), L('Carotte', 100)]),
+      dindeCourgette:        meal('Dinde + courgette', 'matin', [V('Dinde', 500), L('Courgette', 100)]),
+      pouletOsHaricots:      meal('Poulet + os + haricots verts', 'matin', [V('Poulet (filet)', 500), OS(), L('Haricot vert', 100)]),
+      dindeBrocoli:          meal('Dinde + brocoli', 'matin', [V('Dinde', 500), L('Brocoli', 100)]),
+      pouletEpinards:        meal('Poulet + épinards', 'matin', [V('Poulet (filet)', 500), L('Épinard', 100)]),
+      dindeOsCourgette:      meal('Dinde + os + courgette', 'matin', [V('Dinde', 500), OS(), L('Courgette', 100)]),
+      lapinCarotte:          meal('Lapin + carotte', 'matin', [V('Lapin', 500), L('Carotte', 100)]),
+      dindeAbatsBrocoli:     meal('Dinde + abats + brocoli', 'soir', [V('Dinde', 300), AB(200), L('Brocoli', 100)]),
+      boeufOsOeufHaricots:   meal('Bœuf + os + œuf + haricots verts', 'soir', [V('Bœuf', 400), OS(), OEUF(), L('Haricot vert', 100)]),
+      boeufAbatsPotiron:     meal('Bœuf + abats + potiron', 'soir', [V('Bœuf', 300), AB(200), L('Potiron', 100)]),
+      agneauOeufCourgette:   meal('Agneau + œuf + courgette', 'soir', [V('Agneau', 400), OEUF(), L('Courgette', 100)]),
+      agneauOeufCarotte:     meal('Agneau + œuf + carotte', 'soir', [V('Agneau', 500), OEUF(), L('Carotte', 100)]),
+      pouletAbatsPetitsPois: meal('Poulet + abats + petits pois', 'soir', [V('Poulet (filet)', 500), AB(200), L('Petit pois', 100)]),
+      boeufOeufPatateDouce:  meal('Bœuf + œuf + patate douce', 'soir', [V('Bœuf', 400), OEUF(), L('Patate douce', 100)]),
+      lapinAbatsEpinards:    meal('Lapin + abats + épinards', 'soir', [V('Lapin', 300), AB(200), L('Épinard', 100)]),
+      saumonCourgette:       meal('Saumon + courgette', 'soir', [V('Saumon', 400), L('Courgette', 100)]),
+      coteBroutardBrocoli:   meal('Côte de broutard + brocoli', 'soir', [V('Côte de broutard', 400), L('Brocoli', 100)])
     };
   }
 
@@ -222,6 +226,13 @@
     if (!Array.isArray(s.cuts)) s.cuts = seedCuts();
     // Onglet « Animaux entiers » : ajoute les articles par défaut aux données existantes
     if (!s.ingredients.some((i) => i.category === 'entier')) s.ingredients = s.ingredients.concat(base.ingredients.filter((i) => i.category === 'entier'));
+    // Créneau matin/soir des repas : déduit du nom « … (matin) » / « … (soir…) », puis nettoyé
+    s.meals.forEach((m) => {
+      if (m.slot) return;
+      const match = (m.name || '').match(/\s*\((matin|soir)[^)]*\)\s*$/i);
+      m.slot = match ? match[1].toLowerCase() : 'matin';
+      if (match) m.name = m.name.replace(/\s*\((matin|soir)[^)]*\)\s*$/i, '');
+    });
     // Repas types : créés une seule fois (supprimables ensuite sans qu'ils reviennent)
     if (typeof s.seeded !== 'object' || !s.seeded) s.seeded = {};
     if (!s.seeded.mealsExS1) {
@@ -236,9 +247,10 @@
         && !(s.stock[i.id] > 0)
         && !s.purchases.some((p) => (p.items || []).some((x) => x.ingredientId === i.id))
         && !s.meals.some((m) => (m.items || []).some((x) => x.ingredientId === i.id))));
-      ensureSheetMeals(s);
       s.seeded.mealsExS1 = true;
     }
+    // Repas des rotations 4 semaines (lapin, saumon, côte de broutard…) : seedés une fois
+    if (!s.seeded.mealsRotation4) { ensureSheetMeals(s); s.seeded.mealsRotation4 = true; }
     return s;
   }
 
@@ -384,7 +396,7 @@
 
     /* ---- Repas-types ---- */
     meal: (id) => state.meals.find((m) => m.id === id),
-    addMeal(data) { const m = Object.assign({ id: uid(), name: '', items: [] }, data); commit((s) => s.meals.push(m)); return m; },
+    addMeal(data) { const m = Object.assign({ id: uid(), name: '', slot: 'matin', items: [] }, data); commit((s) => s.meals.push(m)); return m; },
     updateMeal(id, patch) { commit((s) => { const m = s.meals.find((x) => x.id === id); if (m) Object.assign(m, patch); }); },
     removeMeal(id) {
       commit((s) => {
@@ -638,25 +650,58 @@
       });
     },
 
-    /* ---- Rotation type (semaine « Ex S1 » du sheet HATCHI 2026) ---- */
+    /* ---- Rotation type 4 semaines (base : tableau « Ex S1 » du sheet HATCHI 2026) ----
+       Bien-être : rotation des protéines sur le mois (poulet/dinde/bœuf/agneau/lapin/saumon/broutard),
+       poisson 1×/semaine (oméga-3), abats 3×200 g et 3 os par semaine, légumes variés. */
     loadExampleRotation() {
       commit((s) => {
         const M = ensureSheetMeals(s);
-        // Rotation 1 semaine (0=lundi … 6=dimanche), matin / soir — reprise telle quelle du tableau Ex S1
-        const plan = {
-          0: { matin: [M.pouletOeufCarotte], soir: [M.dindeAbatsBrocoli] },     // Lundi
-          1: { matin: [M.pouletCarotte],     soir: [M.boeufOsOeufHaricots] },   // Mardi
-          2: { matin: [M.dindeCourgette],    soir: [M.boeufAbatsPotiron] },     // Mercredi
-          3: { matin: [M.pouletOsHaricots],  soir: [M.agneauOeufCourgette] },   // Jeudi
-          4: { matin: [M.dindeBrocoli],      soir: [M.agneauOeufCarotte] },     // Vendredi
-          5: { matin: [M.pouletEpinards],    soir: [M.pouletAbatsPetitsPois] }, // Samedi
-          6: { matin: [M.dindeOsCourgette],  soir: [M.boeufOeufPatateDouce] }   // Dimanche
-        };
-        for (let d = 0; d < 7; d++) {
-          s.rotation[`w1-${d}-matin`] = plan[d].matin.slice();
-          s.rotation[`w1-${d}-soir`] = plan[d].soir.slice();
-        }
-        s.settings.cycleWeeks = 1;
+        // 4 semaines × 7 jours (0=lundi … 6=dimanche), matin / soir
+        const weeks = [
+          { // Semaine 1 — la semaine Ex S1 telle quelle
+            0: { matin: M.pouletOeufCarotte, soir: M.dindeAbatsBrocoli },
+            1: { matin: M.pouletCarotte,     soir: M.boeufOsOeufHaricots },
+            2: { matin: M.dindeCourgette,    soir: M.boeufAbatsPotiron },
+            3: { matin: M.pouletOsHaricots,  soir: M.agneauOeufCourgette },
+            4: { matin: M.dindeBrocoli,      soir: M.agneauOeufCarotte },
+            5: { matin: M.pouletEpinards,    soir: M.pouletAbatsPetitsPois },
+            6: { matin: M.dindeOsCourgette,  soir: M.boeufOeufPatateDouce }
+          },
+          { // Semaine 2 — lapin + saumon
+            0: { matin: M.dindeBrocoli,      soir: M.lapinAbatsEpinards },
+            1: { matin: M.pouletOsHaricots,  soir: M.saumonCourgette },
+            2: { matin: M.lapinCarotte,      soir: M.boeufOeufPatateDouce },
+            3: { matin: M.dindeCourgette,    soir: M.boeufAbatsPotiron },
+            4: { matin: M.pouletOeufCarotte, soir: M.agneauOeufCourgette },
+            5: { matin: M.dindeOsCourgette,  soir: M.pouletAbatsPetitsPois },
+            6: { matin: M.pouletEpinards,    soir: M.boeufOsOeufHaricots }
+          },
+          { // Semaine 3 — côte de broutard + saumon
+            0: { matin: M.pouletCarotte,     soir: M.coteBroutardBrocoli },
+            1: { matin: M.dindeCourgette,    soir: M.pouletAbatsPetitsPois },
+            2: { matin: M.pouletOsHaricots,  soir: M.agneauOeufCarotte },
+            3: { matin: M.lapinCarotte,      soir: M.dindeAbatsBrocoli },
+            4: { matin: M.dindeOsCourgette,  soir: M.saumonCourgette },
+            5: { matin: M.pouletOeufCarotte, soir: M.boeufAbatsPotiron },
+            6: { matin: M.pouletEpinards,    soir: M.boeufOsOeufHaricots }
+          },
+          { // Semaine 4 — mélange de tout
+            0: { matin: M.dindeCourgette,    soir: M.boeufOeufPatateDouce },
+            1: { matin: M.pouletCarotte,     soir: M.lapinAbatsEpinards },
+            2: { matin: M.pouletOsHaricots,  soir: M.dindeAbatsBrocoli },
+            3: { matin: M.dindeBrocoli,      soir: M.saumonCourgette },
+            4: { matin: M.pouletOeufCarotte, soir: M.coteBroutardBrocoli },
+            5: { matin: M.dindeOsCourgette,  soir: M.boeufAbatsPotiron },
+            6: { matin: M.pouletEpinards,    soir: M.boeufOsOeufHaricots }
+          }
+        ];
+        weeks.forEach((plan, w) => {
+          for (let d = 0; d < 7; d++) {
+            s.rotation[`w${w + 1}-${d}-matin`] = [plan[d].matin];
+            s.rotation[`w${w + 1}-${d}-soir`] = [plan[d].soir];
+          }
+        });
+        s.settings.cycleWeeks = 4;
       });
     },
 

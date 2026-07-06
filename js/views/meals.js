@@ -8,6 +8,8 @@
   const { DAYS_SHORT } = UI;
 
   let tab = 'rotation'; // 'rotation' | 'types'
+  let typesSlot = 'matin'; // onglet actif dans Repas-types : 'matin' | 'soir'
+  const mealSlot = (m) => m.slot || 'matin';
 
   /* ---------- Repas-types ---------- */
   function mealSummary(m) {
@@ -20,7 +22,8 @@
 
   function openMealEditor(meal) {
     const isNew = !meal;
-    let draft = meal ? JSON.parse(JSON.stringify(meal)) : { name: '', items: [] };
+    let draft = meal ? JSON.parse(JSON.stringify(meal)) : { name: '', slot: typesSlot, items: [] };
+    if (!draft.slot) draft.slot = 'matin';
 
     const itemsBox = h('div');
     function renderItems() {
@@ -41,11 +44,17 @@
     }
     renderItems();
 
+    const slotSeg = h('div.seg', null, [['matin', '🌅 Matin'], ['soir', '🌙 Soir']].map(([v, l]) =>
+      h('button', { class: draft.slot === v ? 'on' : '', onClick: (e) => {
+        draft.slot = v;
+        [...slotSeg.children].forEach((b) => b.classList.toggle('on', b === e.currentTarget));
+      } }, l)));
     const body = h('div', null, [
       h('div.field', null, [
         h('label', null, 'Nom du repas-type'),
-        h('input.input', { value: draft.name, placeholder: 'Ex. Poulet + os (matin)', onInput: (e) => draft.name = e.target.value })
+        h('input.input', { value: draft.name, placeholder: 'Ex. Poulet + os', onInput: (e) => draft.name = e.target.value })
       ]),
+      h('div.field', null, [h('label', null, 'Repas du…'), slotSeg]),
       h('div.field', null, [
         h('label', null, 'Ingrédients & quantités'),
         itemsBox,
@@ -70,19 +79,21 @@
   }
 
   function typesView(root) {
-    const meals = Store.get().meals;
+    root.appendChild(h('div.seg', { style: 'margin-bottom:12px' }, [['matin', '🌅 Matin'], ['soir', '🌙 Soir']].map(([v, l]) =>
+      h('button', { class: typesSlot === v ? 'on' : '', onClick: () => { typesSlot = v; App.rerender(); } }, l))));
+    const meals = Store.get().meals.filter((m) => mealSlot(m) === typesSlot);
     if (!meals.length) {
-      root.appendChild(h('div.card', null, UI.emptyState('🍖', 'Aucun repas-type', 'Créez vos repas (ex. « Poulet + os », « Bœuf + courgette + œuf ») puis placez-les dans la rotation.')));
+      root.appendChild(h('div.card', null, UI.emptyState('🍖', 'Aucun repas-type du ' + typesSlot, 'Créez vos repas (ex. « Poulet + os », « Bœuf + courgette + œuf ») puis placez-les dans la rotation.')));
     } else {
       root.appendChild(h('div.card.flush', null, meals.map((m) =>
         h('div.row', { onClick: () => openMealEditor(m) }, [
-          h('div.row-ic', null, '🍖'),
+          h('div.row-ic', null, typesSlot === 'matin' ? '🌅' : '🌙'),
           h('div.row-main', null, [h('strong', null, m.name), h('small', null, mealSummary(m))]),
           h('div.row-end', null, h('span.muted', null, '›'))
         ])
       )));
     }
-    root.appendChild(h('button.btn.block', { style: 'margin-top:8px', onClick: () => openMealEditor(null) }, '+ Nouveau repas-type'));
+    root.appendChild(h('button.btn.block', { style: 'margin-top:8px', onClick: () => openMealEditor(null) }, '+ Nouveau repas-type du ' + typesSlot));
   }
 
   /* ---------- Rotation ---------- */
@@ -102,7 +113,9 @@
   }
 
   function openSlotPicker(week, dayIdx, slot, label) {
-    const meals = Store.get().meals;
+    const all = Store.get().meals;
+    // les repas du bon créneau d'abord, les autres ensuite
+    const meals = all.filter((m) => mealSlot(m) === slot).concat(all.filter((m) => mealSlot(m) !== slot));
     let selected = new Set(Store.getRotation(week, dayIdx, slot));
     if (!meals.length) {
       UI.toast('Créez d\'abord des repas-types');
@@ -132,24 +145,24 @@
   function rotationView(root) {
     const cycleWeeks = Store.get().settings.cycleWeeks || 1;
 
-    // Proposition de rotation type si tout est vide
+    // Proposition de rotation 4 semaines (toujours proposée ; remplace la rotation en place)
     const rotationEmpty = !Object.keys(Store.get().rotation).some((k) => (Store.get().rotation[k] || []).length);
-    if (rotationEmpty) {
-      root.appendChild(h('div.card', { style: 'background:var(--green-100);border-color:#bfe0d4' }, [
-        h('div.inline', { style: 'gap:12px' }, [
-          h('span', { style: 'font-size:26px' }, '✨'),
-          h('div', { style: 'flex:1' }, [
-            h('strong', null, 'Démarrer avec votre rotation type'),
-            h('div.small.muted', null, 'Plan viande maison matin/soir repris de votre tableau HATCHI 2026. Modifiable ensuite.')
-          ])
-        ]),
-        h('button.btn.block', { style: 'margin-top:12px', onClick: async () => {
-          if (await UI.confirm('Charger la rotation type (crée les repas-types et remplit la semaine) ?', { ok: 'Charger' })) {
-            Store.loadExampleRotation(); UI.toast('Rotation chargée ✓');
-          }
-        } }, '✨ Charger la rotation type')
-      ]));
-    }
+    root.appendChild(h('div.card', { style: 'background:var(--green-100);border-color:#bfe0d4' }, [
+      h('div.inline', { style: 'gap:12px' }, [
+        h('span', { style: 'font-size:26px' }, '✨'),
+        h('div', { style: 'flex:1' }, [
+          h('strong', null, 'Rotation 4 semaines « bien-être »'),
+          h('div.small.muted', null, 'Protéines variées sur le mois, poisson 1×/semaine, abats et os répartis — à partir de vos repas du tableau HATCHI 2026. Modifiable ensuite.')
+        ])
+      ]),
+      h('button.btn.block', { style: 'margin-top:12px', onClick: async () => {
+        if (await UI.confirm(rotationEmpty
+          ? 'Charger la rotation 4 semaines (crée les repas-types et remplit les 4 semaines) ?'
+          : 'Charger la rotation 4 semaines ? Elle remplace la rotation actuelle.', { ok: 'Charger' })) {
+          Store.loadExampleRotation(); UI.toast('Rotation 4 semaines chargée ✓');
+        }
+      } }, '✨ Charger la rotation 4 semaines')
+    ]));
 
     // Sélecteur du nombre de semaines de cycle
     root.appendChild(h('div.card', null, [
