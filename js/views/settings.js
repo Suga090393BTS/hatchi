@@ -101,6 +101,47 @@ create policy "hatchi_all" on public.hatchi_state
     UI.modal({ title: cut ? 'Modifier le morceau' : 'Nouveau morceau', body });
   }
 
+  /* ---------- Pharmacie (fiches médicaments/produits) ---------- */
+  function openPharmacyList() {
+    const meds = Store.pharmacy();
+    const card = h('div.card.flush');
+    if (!meds.length) card.appendChild(h('div.empty', { style: 'padding:18px' }, 'Aucun produit'));
+    meds.forEach((p) => {
+      card.appendChild(h('div.row', { onClick: () => { UI.closeModal(); setTimeout(() => openPharmaEditor(p), 50); } }, [
+        h('div.row-ic', null, '💊'),
+        h('div.row-main', null, [h('strong', null, p.name), h('small', null, p.dose || 'Posologie non renseignée')]),
+        h('div.row-end', null, h('span.muted', null, '›'))
+      ]));
+    });
+    const body = h('div', null, [
+      h('p.muted.small', { style: 'margin:0 0 10px' }, 'Tes fiches produits : posologie, principes actifs, remarques. Proposées dans la fiche du jour (💊) et dans les soins.'),
+      card,
+      h('button.btn.block', { style: 'margin-top:10px', onClick: () => { UI.closeModal(); setTimeout(() => openPharmaEditor(null), 50); } }, '+ Ajouter un produit')
+    ]);
+    UI.modal({ title: '💊 Pharmacie', body });
+  }
+  function openPharmaEditor(p) {
+    const isNew = !p;
+    let d = p ? JSON.parse(JSON.stringify(p)) : { name: '', dose: '', actives: '', notes: '' };
+    const body = h('div', null, [
+      h('div.field', null, [h('label', null, 'Nom du produit'), h('input.input', { value: d.name, placeholder: 'Ex. Drontal, Biseptine…', onInput: (e) => d.name = e.target.value })]),
+      h('div.field', null, [h('label', null, 'Posologie'), h('input.input', { value: d.dose || '', placeholder: 'Ex. 1 comprimé et demi, tous les 3 mois', onInput: (e) => d.dose = e.target.value })]),
+      h('div.field', null, [h('label', null, 'Principes actifs / composition'), h('input.input', { value: d.actives || '', placeholder: 'Ex. praziquantel, pyrantel…', onInput: (e) => d.actives = e.target.value })]),
+      h('div.field', null, [h('label', null, 'Remarques'), h('textarea.input', { value: d.notes || '', placeholder: 'Précautions, où l\'acheter, ordonnance…', onInput: (e) => d.notes = e.target.value })]),
+      h('div.modal-actions', null, [
+        !isNew ? h('button.btn.danger', { onClick: async () => {
+          if (await UI.confirm('Supprimer « ' + p.name + ' » de la pharmacie ?', { danger: true, ok: 'Supprimer' })) { Store.removePharmaMed(p.id); UI.closeModal(); setTimeout(openPharmacyList, 50); }
+        } }, '🗑') : h('button.btn.subtle', { onClick: () => { UI.closeModal(); setTimeout(openPharmacyList, 50); } }, 'Annuler'),
+        h('button.btn', { style: 'flex:2', onClick: () => {
+          if (!d.name.trim()) { UI.toast('Nom requis'); return; }
+          if (isNew) Store.addPharmaMed(d); else Store.updatePharmaMed(p.id, d);
+          UI.closeModal(); setTimeout(openPharmacyList, 50);
+        } }, 'Enregistrer')
+      ])
+    ]);
+    UI.modal({ title: isNew ? 'Nouveau produit' : 'Fiche produit', body });
+  }
+
   /* ---------- Humeurs (liste du journal) ---------- */
   function openMoodsList() {
     const moods = Store.moods();
@@ -236,6 +277,15 @@ create policy "hatchi_all" on public.hatchi_state
         h('div.inline', { style: 'justify-content:space-between' }, [
           h('div', null, [h('strong', null, Store.cuts().length + ' morceaux'), h('div.muted.small', null, 'Suggestions à la saisie d’un achat')]),
           h('button.btn.ghost.sm', { onClick: openCutsList }, 'Gérer')
+        ])
+      ]));
+
+      // Pharmacie
+      root.appendChild(h('div.section-title', null, 'Pharmacie'));
+      root.appendChild(h('div.card', null, [
+        h('div.inline', { style: 'justify-content:space-between' }, [
+          h('div', null, [h('strong', null, Store.pharmacy().length + ' produits'), h('div.muted.small', null, 'Posologies & principes actifs — proposés dans la fiche du jour et les soins')]),
+          h('button.btn.ghost.sm', { onClick: openPharmacyList }, 'Gérer')
         ])
       ]));
 

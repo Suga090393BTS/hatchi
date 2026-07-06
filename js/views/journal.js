@@ -107,7 +107,8 @@
       h('div.modal-actions', null, [
         h('button.btn.subtle', { onClick: () => UI.closeModal() }, 'Annuler'),
         h('button.btn', { onClick: () => {
-          draft.meds = (draft.meds || []).filter((m) => (m.name || '').trim() || (m.dose || '').trim());
+          draft.meds = (draft.meds || []).filter((m) => (m.name || '').trim() || (m.dose || '').trim())
+            .map((m) => { const o = { name: m.name, dose: m.dose }; if (m.medId) o.medId = m.medId; return o; });
           Store.updateDay(iso, draft); UI.closeModal(); UI.toast('Journée enregistrée');
         } }, 'Enregistrer')
       ])
@@ -158,19 +159,44 @@
     return el;
   }
 
-  // Malade ? Médicaments & soins donnés ce jour-là (ex. Biseptine 2×/jour sur la patte)
+  // Malade ? Médicaments & soins donnés ce jour-là — pioche dans la pharmacie (fiche ℹ️) ou saisie libre
   function medsField(draft) {
     const wrap = h('div.field');
     function render() {
       UI.clear(wrap);
       wrap.appendChild(h('label', null, '💊 Malade ? Médicaments & soins donnés'));
       draft.meds = draft.meds || [];
-      if (!draft.meds.length) wrap.appendChild(h('div.muted.small', { style: 'margin-bottom:6px' }, 'Note ici ce que tu lui donnes ou appliques (médicament, Biseptine, pommade…) avec la posologie.'));
+      const pharmacy = Store.pharmacy();
+      if (!draft.meds.length) wrap.appendChild(h('div.muted.small', { style: 'margin-bottom:6px' },
+        'Choisis un produit de ta pharmacie (fiches dans Réglages → Pharmacie) ou saisis librement.'));
       draft.meds.forEach((m, idx) => {
-        wrap.appendChild(h('div.inline', { style: 'margin-bottom:8px;align-items:flex-start' }, [
-          h('input.input', { style: 'flex:1.1', placeholder: 'Ex. Biseptine', value: m.name || '', onInput: (e) => m.name = e.target.value }),
-          h('input.input', { style: 'flex:1.5', placeholder: 'Posologie / où (ex. 2×/jour sur la patte)', value: m.dose || '', onInput: (e) => m.dose = e.target.value }),
-          h('button.delete-x', { onClick: () => { draft.meds.splice(idx, 1); render(); } }, '✕')
+        const med = m.medId ? Store.pharmaMed(m.medId) : null;
+        // sélecteur pharmacie pour les nouvelles lignes ; saisie libre sinon
+        const useSelect = pharmacy.length && (m.medId || (!m.name && !m._free));
+        const nameCtl = useSelect
+          ? h('select.input', { style: 'flex:1.2', onChange: (e) => {
+              const v = e.target.value;
+              if (v === '__libre__') { m.medId = null; m.name = ''; m._free = true; }
+              else if (v) { const p = Store.pharmaMed(v); m.medId = v; m.name = p.name; if (!m.dose && p.dose) m.dose = p.dose; }
+              render();
+            } }, [
+              h('option', { value: '', selected: !m.medId, disabled: true }, 'Choisir un produit…'),
+              ...pharmacy.map((p) => h('option', { value: p.id, selected: p.id === m.medId }, p.name)),
+              h('option', { value: '__libre__' }, 'Autre (saisie libre)…')
+            ])
+          : h('input.input', { style: 'flex:1.2', placeholder: 'Ex. Biseptine', value: m.name || '', onInput: (e) => m.name = e.target.value });
+        const info = med && (med.dose || med.actives || med.notes)
+          ? h('div.muted.small', { style: 'display:none;white-space:pre-wrap;background:var(--sand);padding:8px 10px;border-radius:10px;margin:4px 0 0' },
+              [med.dose ? 'Posologie : ' + med.dose : null, med.actives ? 'Principes actifs : ' + med.actives : null, med.notes || null].filter(Boolean).join('\n'))
+          : null;
+        wrap.appendChild(h('div', { style: 'margin-bottom:8px' }, [
+          h('div.inline', { style: 'align-items:flex-start' }, [
+            nameCtl,
+            h('input.input', { style: 'flex:1.4', placeholder: 'Posologie / où (ex. 2×/jour sur la patte)', value: m.dose || '', onInput: (e) => m.dose = e.target.value }),
+            info ? h('button.btn.ghost.icon', { title: 'Fiche produit', onClick: () => { info.style.display = info.style.display === 'none' ? '' : 'none'; } }, 'ℹ️') : null,
+            h('button.delete-x', { onClick: () => { draft.meds.splice(idx, 1); render(); } }, '✕')
+          ]),
+          info
         ]));
       });
       wrap.appendChild(h('button.btn.ghost.sm', { onClick: () => { draft.meds.push({ name: '', dose: '' }); render(); } }, '+ Médicament / soin donné'));

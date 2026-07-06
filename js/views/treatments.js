@@ -35,7 +35,8 @@
         h('small', null, [
           `Tous les ${t.every} ${t.unit}`,
           t.last ? ` · dernier ${fmtShortYear(t.last)}` : ' · jamais fait',
-          due ? ` · prochain ${fmtShortYear(due)}` : ''
+          due ? ` · prochain ${fmtShortYear(due)}` : '',
+          (() => { const m = t.medId && Store.pharmaMed(t.medId); return m ? ` · 💊 ${m.name.split(' (')[0]}` : ''; })()
         ].join(''))
       ]),
       h('div.row-end', null, [
@@ -62,6 +63,7 @@
           h('select.input', { onChange: (e) => d.unit = e.target.value }, ['jours', 'mois', 'ans'].map((u) => h('option', { value: u, selected: u === d.unit }, u)))])
       ]),
       h('div.field', null, [h('label', null, 'Dernier fait le'), h('input.input', { type: 'date', value: d.last || '', max: Store.todayISO(), onChange: (e) => d.last = e.target.value || null })]),
+      medField(d),
       h('div.field', null, [h('label', null, 'Notes'), h('textarea.input', { value: d.notes || '', placeholder: 'Marque, dosage…', onInput: (e) => d.notes = e.target.value })]),
       t && t.history && t.history.length ? h('div.field', null, [
         h('label', null, 'Historique'),
@@ -83,6 +85,28 @@
     ]);
     const nameInput = body.querySelector('input.input');
     UI.modal({ title: isNew ? 'Nouveau soin' : 'Modifier', body });
+  }
+
+  // Produit de la pharmacie lié au soin (ex. vermifuge → Drontal) : fiche affichée en direct
+  function medField(d) {
+    const wrap = h('div.field');
+    function render() {
+      UI.clear(wrap);
+      const pharmacy = Store.pharmacy();
+      if (!pharmacy.length) return;
+      wrap.appendChild(h('label', null, 'Produit utilisé (pharmacie)'));
+      wrap.appendChild(h('select.input', { onChange: (e) => { d.medId = e.target.value || null; render(); } }, [
+        h('option', { value: '', selected: !d.medId }, '— Aucun —')
+      ].concat(pharmacy.map((p) => h('option', { value: p.id, selected: p.id === d.medId }, p.name)))));
+      const med = d.medId ? Store.pharmaMed(d.medId) : null;
+      if (med && (med.dose || med.actives || med.notes)) {
+        wrap.appendChild(h('div.muted.small', { style: 'white-space:pre-wrap;background:var(--sand);padding:8px 10px;border-radius:10px;margin-top:6px' },
+          [med.dose ? 'Posologie : ' + med.dose : null, med.actives ? 'Principes actifs : ' + med.actives : null, med.notes || null].filter(Boolean).join('\n')));
+      }
+      wrap.appendChild(h('div.muted.small', { style: 'margin-top:4px' }, 'Fiches modifiables dans Réglages → Pharmacie.'));
+    }
+    render();
+    return wrap;
   }
 
   let tab = 'soins'; // 'soins' | 'poids'

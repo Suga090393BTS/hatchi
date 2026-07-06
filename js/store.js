@@ -71,6 +71,16 @@
     return ['😀 En forme', '😐 Calme', '😟 Fatigué', '😴 Épuisé', '🤩 Excité', '😰 Stressé', '😠 Agressif', '🤢 Malade'];
   }
 
+  // Pharmacie : fiches produits (posologie, principes actifs). Modifiables dans Réglages.
+  function seedPharmacy() {
+    const M = (name, dose, actives, notes) => ({ id: uid(), name, dose, actives, notes: notes || '' });
+    return [
+      M('Drontal (vermifuge)', '1 comprimé et demi, tous les 3 mois', 'praziquantel, pyrantel, fébantel', 'Vermifuge large spectre (vers ronds et plats).'),
+      M('Seresto (collier anti-puces/tiques)', '1 collier, efficace environ 8 mois', 'imidaclopride, fluméthrine', 'Retirer pour les baignades prolongées.'),
+      M('Biseptine', 'Application locale 2 à 3 fois par jour, sur peau propre', 'chlorhexidine, chlorure de benzalkonium', 'Antiseptique cutané — éviter les yeux.')
+    ];
+  }
+
   // Personnes qui s'occupent du chien (repris du sheet HATCHI 2026). Modifiables.
   function seedPeople() {
     return ['Flo', 'Fanny', 'Alex', 'Noune'].map((n) => ({ id: uid(), name: n }));
@@ -151,6 +161,7 @@ Avion : cabine pour les petits gabarits (selon compagnie), sinon soute pressuris
       cuts: seedCuts(),          // morceaux suggérés (['cuisse', 'bavette', …])
       fed: [],                   // repas réellement donnés : [{id, date, slot, items:[{ingredientId, qty}]}]
       moods: seedMoods(),        // humeurs proposées dans le journal
+      pharmacy: seedPharmacy(),  // fiches médicaments/produits : [{id, name, dose, actives, notes}]
       identity: { chipNumber: '', chipPhoto: '', identDate: '', identVet: '', prevOwner: '', prevVet: '' }, // puce, véto identificateur, ancien détenteur/véto
       vetCurrent: { name: '', phone: '', address: '' },  // vétérinaire actuel
       documents: [],             // papiers du chien : [{id, name, mime, size, dataURL, addedAt}]
@@ -287,6 +298,7 @@ Avion : cabine pour les petits gabarits (selon compagnie), sinon soute pressuris
     if (!Array.isArray(s.cuts)) s.cuts = seedCuts();
     if (!Array.isArray(s.fed)) s.fed = [];
     if (!Array.isArray(s.moods)) s.moods = seedMoods();
+    if (!Array.isArray(s.pharmacy)) s.pharmacy = [];
     s.identity = Object.assign({}, base.identity, s.identity || {});
     s.vetCurrent = Object.assign({}, base.vetCurrent, s.vetCurrent || {});
     if (!Array.isArray(s.documents)) s.documents = [];
@@ -329,6 +341,18 @@ Avion : cabine pour les petits gabarits (selon compagnie), sinon soute pressuris
         });
       });
       s.seeded.matin300 = true;
+    }
+    // Pharmacie : seedée une fois + liaison automatique aux soins existants (vermifuge → Drontal, collier → Seresto)
+    if (!s.seeded.pharmacy) {
+      const have = new Set(s.pharmacy.map((p) => p.name.toLowerCase()));
+      s.pharmacy = s.pharmacy.concat(seedPharmacy().filter((p) => !have.has(p.name.toLowerCase())));
+      const byType = { vermifuge: 'drontal', collier: 'seresto' };
+      s.treatments.forEach((t) => {
+        if (t.medId || !byType[t.type]) return;
+        const med = s.pharmacy.find((p) => p.name.toLowerCase().includes(byType[t.type]));
+        if (med) t.medId = med.id;
+      });
+      s.seeded.pharmacy = true;
     }
     // Fiches du carnet de référence : seedées une fois (modifiables/supprimables ensuite)
     if (!s.seeded.healthPages) {
@@ -722,6 +746,18 @@ Avion : cabine pour les petits gabarits (selon compagnie), sinon soute pressuris
         nameParts.push(leg.name.toLowerCase());
       }
       return { name: nameParts.join(' + '), slot, items };
+    },
+
+    /* ---- Pharmacie (fiches médicaments/produits) ---- */
+    pharmacy: () => state.pharmacy.slice(),
+    pharmaMed: (id) => state.pharmacy.find((p) => p.id === id),
+    addPharmaMed(data) { const p = Object.assign({ id: uid(), name: '', dose: '', actives: '', notes: '' }, data); commit((s) => s.pharmacy.push(p)); return p; },
+    updatePharmaMed(id, patch) { commit((s) => { const p = s.pharmacy.find((x) => x.id === id); if (p) Object.assign(p, patch); }); },
+    removePharmaMed(id) {
+      commit((s) => {
+        s.pharmacy = s.pharmacy.filter((x) => x.id !== id);
+        s.treatments.forEach((t) => { if (t.medId === id) t.medId = null; }); // les journées gardent le nom copié
+      });
     },
 
     /* ---- Humeurs (liste modifiable du journal) ---- */
