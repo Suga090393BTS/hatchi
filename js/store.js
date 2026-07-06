@@ -164,35 +164,47 @@
     } catch (e) { /* ignore */ }
     return migrate(emptyState());
   }
-  // Repas types du sheet HATCHI 2026 : 1 plat = 1 boudin = 400 g (2 à 3 boudins/jour).
-  // Crée les ingrédients « boudins » + les repas types s'ils n'existent pas déjà (par nom).
+  // Repas types du tableau « Ex S1 » du sheet HATCHI 2026 (BARF viande maison) :
+  // matin = viande 500 g + légume ; soir = viande 300-500 g + légume + abats/œuf/os.
+  // Idempotent (par nom). Renvoie {clé: mealId} pour construire la rotation type.
   function ensureSheetMeals(s) {
     const ingByName = {};
     s.ingredients.forEach((i) => { ingByName[i.name.toLowerCase()] = i; });
-    const ensureIng = (name, cat) => {
+    const ing = (name, cat, unit) => {
       let i = ingByName[name.toLowerCase()];
-      if (!i) { i = { id: uid(), name, category: cat, unit: 'g', price: 0 }; s.ingredients.push(i); ingByName[name.toLowerCase()] = i; }
-      return i;
+      if (!i) { i = { id: uid(), name, category: cat, unit, price: 0 }; s.ingredients.push(i); ingByName[name.toLowerCase()] = i; }
+      return i.id;
     };
-    const mealNames = new Set(s.meals.map((m) => (m.name || '').toLowerCase()));
-    const ensureMeal = (name, ing, qty) => {
-      if (!mealNames.has(name.toLowerCase())) s.meals.push({ id: uid(), name, items: [{ ingredientId: ing.id, qty }] });
+    ing('Riz cuit', 'autre', 'g'); // féculent, à ajouter aux repas selon les besoins
+    const it = (name, cat, unit, qty) => ({ ingredientId: ing(name, cat, unit), qty });
+    const V = (n, q) => it(n, 'viande', 'g', q);
+    const L = (n, q) => it(n, 'legume', 'g', q);
+    const OEUF = () => it('Œuf', 'oeuf', 'piece', 1);
+    const OS = () => it('Os charnu', 'os', 'piece', 1);
+    const AB = (q) => it('Abats (lot)', 'abats', 'g', q);
+    const mealByName = {};
+    s.meals.forEach((m) => { mealByName[(m.name || '').toLowerCase()] = m.id; });
+    const meal = (name, items) => {
+      const k = name.toLowerCase();
+      if (!mealByName[k]) { const m = { id: uid(), name, items }; s.meals.push(m); mealByName[k] = m.id; }
+      return mealByName[k];
     };
-    const porc = ensureIng('Boudin porc', 'viande');
-    const poulet = ensureIng('Boudin poulet', 'viande');
-    const boeuf = ensureIng('Boudin bœuf', 'viande');
-    const canard = ensureIng('Boudin canard', 'viande');
-    const poisson = ensureIng('Boudin poisson', 'viande');
-    const patee = ensureIng('Pâtée', 'autre');
-    ensureMeal('Boudin porc (400 g)', porc, 400);
-    ensureMeal('Boudin poulet (400 g)', poulet, 400);
-    ensureMeal('Boudin bœuf (400 g)', boeuf, 400);
-    ensureMeal('Boudin canard (400 g)', canard, 400);
-    ensureMeal('Boudin poisson (400 g)', poisson, 400);
-    ensureMeal('Pâtée (400 g)', patee, 400);
-    ensureMeal('Moitié boudin poulet (200 g)', poulet, 200);
-    ensureMeal('Moitié boudin canard (200 g)', canard, 200);
-    ensureMeal('Moitié boudin porc (200 g)', porc, 200);
+    return {
+      pouletOeufCarotte:     meal('Poulet + œuf + carotte (matin)', [V('Poulet (filet)', 500), OEUF(), L('Carotte', 200)]),
+      pouletCarotte:         meal('Poulet + carotte (matin)', [V('Poulet (filet)', 500), L('Carotte', 100)]),
+      dindeCourgette:        meal('Dinde + courgette (matin)', [V('Dinde', 500), L('Courgette', 100)]),
+      pouletOsHaricots:      meal('Poulet + os + haricots verts (matin)', [V('Poulet (filet)', 500), OS(), L('Haricot vert', 100)]),
+      dindeBrocoli:          meal('Dinde + brocoli (matin)', [V('Dinde', 500), L('Brocoli', 100)]),
+      pouletEpinards:        meal('Poulet + épinards (matin)', [V('Poulet (filet)', 500), L('Épinard', 100)]),
+      dindeOsCourgette:      meal('Dinde + os + courgette (matin)', [V('Dinde', 500), OS(), L('Courgette', 100)]),
+      dindeAbatsBrocoli:     meal('Dinde + abats + brocoli (soir)', [V('Dinde', 300), AB(200), L('Brocoli', 100)]),
+      boeufOsOeufHaricots:   meal('Bœuf + os + œuf + haricots verts (soir)', [V('Bœuf', 400), OS(), OEUF(), L('Haricot vert', 100)]),
+      boeufAbatsPotiron:     meal('Bœuf + abats + potiron (soir)', [V('Bœuf', 300), AB(200), L('Potiron', 100)]),
+      agneauOeufCourgette:   meal('Agneau + œuf + courgette (soir)', [V('Agneau', 400), OEUF(), L('Courgette', 100)]),
+      agneauOeufCarotte:     meal('Agneau + œuf + carotte (soir)', [V('Agneau', 500), OEUF(), L('Carotte', 100)]),
+      pouletAbatsPetitsPois: meal('Poulet + abats + petits pois (soir)', [V('Poulet (filet)', 500), AB(200), L('Petit pois', 100)]),
+      boeufOeufPatateDouce:  meal('Bœuf + œuf + patate douce (soir)', [V('Bœuf', 400), OEUF(), L('Patate douce', 100)])
+    };
   }
 
   function migrate(s) {
@@ -210,9 +222,23 @@
     if (!Array.isArray(s.cuts)) s.cuts = seedCuts();
     // Onglet « Animaux entiers » : ajoute les articles par défaut aux données existantes
     if (!s.ingredients.some((i) => i.category === 'entier')) s.ingredients = s.ingredients.concat(base.ingredients.filter((i) => i.category === 'entier'));
-    // Repas types du sheet : créés une seule fois (supprimables ensuite sans qu'ils reviennent)
+    // Repas types : créés une seule fois (supprimables ensuite sans qu'ils reviennent)
     if (typeof s.seeded !== 'object' || !s.seeded) s.seeded = {};
-    if (!s.seeded.sheetMeals) { ensureSheetMeals(s); s.seeded.sheetMeals = true; }
+    if (!s.seeded.mealsExS1) {
+      // Fini les boudins DogChef : on retire les repas/ingrédients « boudins » seedés par la v10
+      const boudinMeals = ['Boudin porc (400 g)', 'Boudin poulet (400 g)', 'Boudin bœuf (400 g)', 'Boudin canard (400 g)',
+        'Boudin poisson (400 g)', 'Pâtée (400 g)', 'Moitié boudin poulet (200 g)', 'Moitié boudin canard (200 g)', 'Moitié boudin porc (200 g)'];
+      const removedIds = s.meals.filter((m) => boudinMeals.includes(m.name)).map((m) => m.id);
+      s.meals = s.meals.filter((m) => !boudinMeals.includes(m.name));
+      Object.keys(s.rotation).forEach((k) => { s.rotation[k] = (s.rotation[k] || []).filter((id) => !removedIds.includes(id)); });
+      const boudinIngs = ['Boudin porc', 'Boudin poulet', 'Boudin bœuf', 'Boudin canard', 'Boudin poisson', 'Pâtée'];
+      s.ingredients = s.ingredients.filter((i) => !(boudinIngs.includes(i.name)
+        && !(s.stock[i.id] > 0)
+        && !s.purchases.some((p) => (p.items || []).some((x) => x.ingredientId === i.id))
+        && !s.meals.some((m) => (m.items || []).some((x) => x.ingredientId === i.id))));
+      ensureSheetMeals(s);
+      s.seeded.mealsExS1 = true;
+    }
     return s;
   }
 
@@ -612,42 +638,19 @@
       });
     },
 
-    /* ---- Rotation type (d'après le sheet HATCHI 2026) ---- */
+    /* ---- Rotation type (semaine « Ex S1 » du sheet HATCHI 2026) ---- */
     loadExampleRotation() {
       commit((s) => {
-        const byName = {};
-        s.ingredients.forEach((i) => { byName[i.name] = i.id; });
-        const I = (n) => byName[n];
-        const item = (n, q) => ({ ingredientId: I(n), qty: q });
-        const ensure = (name, items) => {
-          let m = s.meals.find((x) => x.name === name);
-          if (m) { m.items = items; return m.id; }
-          m = { id: uid(), name, items };
-          s.meals.push(m);
-          return m.id;
-        };
-        // Repas-types réutilisables
-        const pouletOeuf = ensure('Poulet + œuf (matin)', [item('Poulet (filet)', 500), item('Œuf', 1)]);
-        const pouletOs   = ensure('Poulet + os (matin)', [item('Poulet (filet)', 500), item('Os charnu', 1)]);
-        const poulet     = ensure('Poulet (matin)', [item('Poulet (filet)', 500)]);
-        const dinde      = ensure('Dinde (matin)', [item('Dinde', 500)]);
-        const dindeOs    = ensure('Dinde + os (matin)', [item('Dinde', 500), item('Os charnu', 1)]);
-        const dindeAbats = ensure('Dinde + abats (soir)', [item('Dinde', 300), item('Abats (lot)', 200)]);
-        const boeuf400   = ensure('Bœuf + œuf (soir)', [item('Bœuf', 400), item('Œuf', 1)]);
-        const boeuf300   = ensure('Bœuf + abats (soir)', [item('Bœuf', 300), item('Abats (lot)', 200)]);
-        const agneau400  = ensure('Agneau + œuf (soir, 400 g)', [item('Agneau', 400), item('Œuf', 1)]);
-        const agneau500  = ensure('Agneau + œuf (soir, 500 g)', [item('Agneau', 500), item('Œuf', 1)]);
-        const pouletAbats = ensure('Poulet + abats (soir)', [item('Poulet (filet)', 500), item('Abats (lot)', 200)]);
-
-        // Rotation 1 semaine (0=lundi … 6=dimanche), matin / soir
+        const M = ensureSheetMeals(s);
+        // Rotation 1 semaine (0=lundi … 6=dimanche), matin / soir — reprise telle quelle du tableau Ex S1
         const plan = {
-          0: { matin: [pouletOeuf], soir: [dindeAbats] },   // Lundi
-          1: { matin: [pouletOs],   soir: [boeuf400] },     // Mardi
-          2: { matin: [dinde],      soir: [boeuf300] },     // Mercredi
-          3: { matin: [pouletOs],   soir: [agneau400] },    // Jeudi
-          4: { matin: [dinde],      soir: [agneau500] },    // Vendredi
-          5: { matin: [poulet],     soir: [pouletAbats] },  // Samedi
-          6: { matin: [dindeOs],    soir: [boeuf400] }      // Dimanche
+          0: { matin: [M.pouletOeufCarotte], soir: [M.dindeAbatsBrocoli] },     // Lundi
+          1: { matin: [M.pouletCarotte],     soir: [M.boeufOsOeufHaricots] },   // Mardi
+          2: { matin: [M.dindeCourgette],    soir: [M.boeufAbatsPotiron] },     // Mercredi
+          3: { matin: [M.pouletOsHaricots],  soir: [M.agneauOeufCourgette] },   // Jeudi
+          4: { matin: [M.dindeBrocoli],      soir: [M.agneauOeufCarotte] },     // Vendredi
+          5: { matin: [M.pouletEpinards],    soir: [M.pouletAbatsPetitsPois] }, // Samedi
+          6: { matin: [M.dindeOsCourgette],  soir: [M.boeufOeufPatateDouce] }   // Dimanche
         };
         for (let d = 0; d < 7; d++) {
           s.rotation[`w1-${d}-matin`] = plan[d].matin.slice();
