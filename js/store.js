@@ -250,14 +250,15 @@ Avion : cabine pour les petits gabarits (selon compagnie), sinon soute pressuris
       return mealByName[k];
     };
     return {
-      pouletOeufCarotte:     meal('Poulet + œuf + carotte', 'matin', [V('Poulet (filet)', 500), OEUF(), L('Carotte', 200)]),
-      pouletCarotte:         meal('Poulet + carotte', 'matin', [V('Poulet (filet)', 500), L('Carotte', 100)]),
-      dindeCourgette:        meal('Dinde + courgette', 'matin', [V('Dinde', 500), L('Courgette', 100)]),
-      pouletOsHaricots:      meal('Poulet + os + haricots verts', 'matin', [V('Poulet (filet)', 500), OS(), L('Haricot vert', 100)]),
-      dindeBrocoli:          meal('Dinde + brocoli', 'matin', [V('Dinde', 500), L('Brocoli', 100)]),
-      pouletEpinards:        meal('Poulet + épinards', 'matin', [V('Poulet (filet)', 500), L('Épinard', 100)]),
-      dindeOsCourgette:      meal('Dinde + os + courgette', 'matin', [V('Dinde', 500), OS(), L('Courgette', 100)]),
-      lapinCarotte:          meal('Lapin + carotte', 'matin', [V('Lapin', 500), L('Carotte', 100)]),
+      // le matin : 300 g de viande (Hatchi mange moins le matin)
+      pouletOeufCarotte:     meal('Poulet + œuf + carotte', 'matin', [V('Poulet (filet)', 300), OEUF(), L('Carotte', 200)]),
+      pouletCarotte:         meal('Poulet + carotte', 'matin', [V('Poulet (filet)', 300), L('Carotte', 100)]),
+      dindeCourgette:        meal('Dinde + courgette', 'matin', [V('Dinde', 300), L('Courgette', 100)]),
+      pouletOsHaricots:      meal('Poulet + os + haricots verts', 'matin', [V('Poulet (filet)', 300), OS(), L('Haricot vert', 100)]),
+      dindeBrocoli:          meal('Dinde + brocoli', 'matin', [V('Dinde', 300), L('Brocoli', 100)]),
+      pouletEpinards:        meal('Poulet + épinards', 'matin', [V('Poulet (filet)', 300), L('Épinard', 100)]),
+      dindeOsCourgette:      meal('Dinde + os + courgette', 'matin', [V('Dinde', 300), OS(), L('Courgette', 100)]),
+      lapinCarotte:          meal('Lapin + carotte', 'matin', [V('Lapin', 300), L('Carotte', 100)]),
       dindeAbatsBrocoli:     meal('Dinde + abats + brocoli', 'soir', [V('Dinde', 300), AB(200), L('Brocoli', 100)]),
       boeufOsOeufHaricots:   meal('Bœuf + os + œuf + haricots verts', 'soir', [V('Bœuf', 400), OS(), OEUF(), L('Haricot vert', 100)]),
       boeufAbatsPotiron:     meal('Bœuf + abats + potiron', 'soir', [V('Bœuf', 300), AB(200), L('Potiron', 100)]),
@@ -318,6 +319,17 @@ Avion : cabine pour les petits gabarits (selon compagnie), sinon soute pressuris
     }
     // Repas des rotations 4 semaines (lapin, saumon, côte de broutard…) : seedés une fois
     if (!s.seeded.mealsRotation4) { ensureSheetMeals(s); s.seeded.mealsRotation4 = true; }
+    // Matins allégés (06/07/2026) : les repas types du matin passent de 500 g à 300 g de viande
+    if (!s.seeded.matin300) {
+      s.meals.forEach((m) => {
+        if ((m.slot || 'matin') !== 'matin') return;
+        (m.items || []).forEach((it) => {
+          const ing = s.ingredients.find((i) => i.id === it.ingredientId);
+          if (ing && ing.category === 'viande' && it.qty === 500) it.qty = 300;
+        });
+      });
+      s.seeded.matin300 = true;
+    }
     // Fiches du carnet de référence : seedées une fois (modifiables/supprimables ensuite)
     if (!s.seeded.healthPages) {
       const have = new Set(s.healthPages.map((p) => p.title.toLowerCase()));
@@ -691,7 +703,7 @@ Avion : cabine pour les petits gabarits (selon compagnie), sinon soute pressuris
       if (!meats.length) return { error: 'Aucune viande en stock — enregistre d\'abord un achat.' };
       // viande avec le plus de réserve (favorise l'écoulement du congélateur)
       const meat = meats.slice().sort((a, b) => stock(b.id) - stock(a.id))[0];
-      const items = [{ ingredientId: meat.id, qty: Math.min(slot === 'soir' ? 400 : 500, stock(meat.id)) }];
+      const items = [{ ingredientId: meat.id, qty: Math.min(slot === 'soir' ? 400 : 300, stock(meat.id)) }];
       const nameParts = [meat.name.replace(/\s*\(.*\)\s*$/, '')];
       const bal = this.barfBalance('week');
       if (slot === 'soir') {

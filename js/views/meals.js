@@ -27,21 +27,25 @@
     return st > 0 ? (i.unit === 'piece' ? '×' + st : UI.grams(st)) + ' en stock' : 'épuisé';
   };
 
-  // Éditeur d'ingrédients partagé (repas-types & repas donnés) : seul le stock est proposé
-  function itemsEditor(draft) {
+  // Éditeur d'ingrédients partagé.
+  // stockOnly=true (repas DONNÉS) : seul ce qui est en stock est proposé, alerte si dépassement.
+  // stockOnly=false (repas-TYPES, prévision) : tout le catalogue, le stock est juste indiqué.
+  function itemsEditor(draft, opts) {
+    const stockOnly = !!(opts && opts.stockOnly);
     const itemsBox = h('div');
     function renderItems() {
       UI.clear(itemsBox);
-      if (!draft.items.length) itemsBox.appendChild(h('div.muted.small', { style: 'padding:6px 2px' }, 'Aucun ingrédient. Composez avec les boutons ci-dessous (seul ce qui est en stock est proposé).'));
+      if (!draft.items.length) itemsBox.appendChild(h('div.muted.small', { style: 'padding:6px 2px' },
+        stockOnly ? 'Aucun ingrédient. Composez avec les boutons ci-dessous (seul ce qui est en stock est proposé).'
+                  : 'Aucun ingrédient. Composez avec les boutons ci-dessous.'));
       draft.items.forEach((it, idx) => {
         const ing = Store.ingredient(it.ingredientId);
-        // ingrédients en stock uniquement (+ celui déjà sélectionné), groupés par catégorie
         const groups = CAT_ORDER.map((cat) => {
-          const list = Store.get().ingredients.filter((i) => i.category === cat && (Store.stockOf(i.id) > 0 || i.id === it.ingredientId));
+          const list = Store.get().ingredients.filter((i) => i.category === cat && (!stockOnly || Store.stockOf(i.id) > 0 || i.id === it.ingredientId));
           return list.length ? h('optgroup', { label: CAT_LABEL[cat] }, list.map((i) =>
             h('option', { value: i.id, selected: i.id === it.ingredientId }, i.name + ' — ' + stockLabel(i)))) : null;
         }).filter(Boolean);
-        const over = ing && ing.unit !== 'piece' && it.qty > Store.stockOf(ing.id);
+        const over = stockOnly && ing && ing.unit !== 'piece' && it.qty > Store.stockOf(ing.id);
         itemsBox.appendChild(h('div.inline', { style: 'margin-bottom:8px' }, [
           h('select.input', { style: 'flex:2', onChange: (e) => { it.ingredientId = e.target.value; renderItems(); } }, groups),
           h('input.input', { style: 'flex:1' + (over ? ';border-color:var(--red)' : ''), type: 'number', min: '0', value: it.qty, onInput: (e) => { it.qty = +e.target.value || 0; } }),
@@ -53,16 +57,19 @@
     }
     renderItems();
     const addBtn = (cat, defQty) => h('button.btn.ghost.sm', { onClick: () => {
-      const opts = Store.get().ingredients.filter((i) => i.category === cat && Store.stockOf(i.id) > 0);
-      if (!opts.length) { UI.toast('Rien en stock dans « ' + CAT_LABEL[cat] + ' » — fais des courses d\'abord'); return; }
-      const first = opts[0];
-      draft.items.push({ ingredientId: first.id, qty: first.unit === 'piece' ? 1 : Math.min(defQty, Store.stockOf(first.id)) });
+      const pool = Store.get().ingredients.filter((i) => i.category === cat && (!stockOnly || Store.stockOf(i.id) > 0));
+      if (!pool.length) { UI.toast(stockOnly ? 'Rien en stock dans « ' + CAT_LABEL[cat] + ' » — fais des courses d\'abord' : 'Aucun ingrédient dans « ' + CAT_LABEL[cat] + ' »'); return; }
+      const first = pool[0];
+      const qty = first.unit === 'piece' ? 1 : (stockOnly ? Math.min(defQty, Store.stockOf(first.id)) : defQty);
+      draft.items.push({ ingredientId: first.id, qty });
       renderItems();
     } }, '+ ' + CAT_LABEL[cat]);
+    // le matin, Hatchi mange moins : viande à 300 g par défaut (400 g le soir)
+    const meatDef = draft.slot === 'soir' ? 400 : 300;
     return h('div', null, [
       itemsBox,
       h('div.inline', { style: 'flex-wrap:wrap;gap:6px' }, [
-        addBtn('viande', 500), addBtn('legume', 100), addBtn('abats', 200),
+        addBtn('viande', meatDef), addBtn('legume', 100), addBtn('abats', 200),
         addBtn('oeuf', 1), addBtn('os', 1), addBtn('autre', 100)
       ])
     ]);
@@ -85,8 +92,8 @@
       ]),
       h('div.field', null, [h('label', null, 'Repas du…'), slotSeg]),
       h('div.field', null, [
-        h('label', null, 'Ingrédients & quantités (selon le stock)'),
-        itemsEditor(draft)
+        h('label', null, 'Ingrédients & quantités (prévision — pas besoin d\'avoir le stock)'),
+        itemsEditor(draft, { stockOnly: false })
       ]),
       h('div.modal-actions', null, [
         !isNew ? h('button.btn.danger', { onClick: async () => {
@@ -159,7 +166,7 @@
         h('div.field', null, [h('label', null, 'Date'), h('input.input', { type: 'date', value: draft.date, max: Store.todayISO(), onChange: (e) => draft.date = e.target.value })]),
         h('div.field', null, [h('label', null, 'Repas du…'), slotSeg])
       ]),
-      h('div.field', null, [h('label', null, 'Ce que j\'ai donné (selon le stock)'), itemsEditor(draft)]),
+      h('div.field', null, [h('label', null, 'Ce que j\'ai donné (selon le stock)'), itemsEditor(draft, { stockOnly: true })]),
       h('div.modal-actions', null, [
         existing ? h('button.btn.danger', { onClick: async () => {
           if (await UI.confirm('Supprimer ce repas ? (le stock est réintégré)', { danger: true, ok: 'Supprimer' })) { Store.removeFed(existing.id); UI.closeModal(); }
