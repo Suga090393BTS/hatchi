@@ -66,6 +66,11 @@
       'épaule', 'gigot', 'côte', 'foie', 'cœur', 'rognons', 'gésier', 'poumon', 'rate', 'tripes'];
   }
 
+  // Humeurs/forme proposées dans le journal. Modifiables dans Réglages.
+  function seedMoods() {
+    return ['😀 En forme', '😐 Calme', '😟 Fatigué', '😴 Épuisé', '🤩 Excité', '😰 Stressé', '😠 Agressif', '🤢 Malade'];
+  }
+
   // Personnes qui s'occupent du chien (repris du sheet HATCHI 2026). Modifiables.
   function seedPeople() {
     return ['Flo', 'Fanny', 'Alex', 'Noune'].map((n) => ({ id: uid(), name: n }));
@@ -145,6 +150,7 @@ Avion : cabine pour les petits gabarits (selon compagnie), sinon soute pressuris
       purchases: [],             // [{id, date, items:[{ingredientId, qty}], cost}]
       cuts: seedCuts(),          // morceaux suggérés (['cuisse', 'bavette', …])
       fed: [],                   // repas réellement donnés : [{id, date, slot, items:[{ingredientId, qty}]}]
+      moods: seedMoods(),        // humeurs proposées dans le journal
       identity: { chipNumber: '', chipPhoto: '', identDate: '', identVet: '', prevOwner: '', prevVet: '' }, // puce, véto identificateur, ancien détenteur/véto
       vetCurrent: { name: '', phone: '', address: '' },  // vétérinaire actuel
       documents: [],             // papiers du chien : [{id, name, mime, size, dataURL, addedAt}]
@@ -279,6 +285,7 @@ Avion : cabine pour les petits gabarits (selon compagnie), sinon soute pressuris
     if (!Array.isArray(s.purchases)) s.purchases = [];
     if (!Array.isArray(s.cuts)) s.cuts = seedCuts();
     if (!Array.isArray(s.fed)) s.fed = [];
+    if (!Array.isArray(s.moods)) s.moods = seedMoods();
     s.identity = Object.assign({}, base.identity, s.identity || {});
     s.vetCurrent = Object.assign({}, base.vetCurrent, s.vetCurrent || {});
     if (!Array.isArray(s.documents)) s.documents = [];
@@ -704,6 +711,26 @@ Avion : cabine pour les petits gabarits (selon compagnie), sinon soute pressuris
       }
       return { name: nameParts.join(' + '), slot, items };
     },
+
+    /* ---- Humeurs (liste modifiable du journal) ---- */
+    moods: () => state.moods.slice(),
+    addMood(name) {
+      name = (name || '').trim();
+      if (!name || state.moods.some((m) => m.toLowerCase() === name.toLowerCase())) return false;
+      commit((s) => s.moods.push(name));
+      return true;
+    },
+    renameMood(oldName, newName) {
+      newName = (newName || '').trim();
+      if (!newName) return;
+      commit((s) => {
+        const i = s.moods.indexOf(oldName);
+        if (i >= 0) s.moods[i] = newName;
+        // met à jour les journées déjà notées avec l'ancien libellé
+        Object.values(s.journal).forEach((d) => { if (d.humeur === oldName) d.humeur = newName; });
+      });
+    },
+    removeMood(name) { commit((s) => { s.moods = s.moods.filter((m) => m !== name); }); },
 
     /* ---- Morceaux (suggestions pour les achats) ---- */
     cuts: () => state.cuts.slice(),

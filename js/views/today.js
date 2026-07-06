@@ -255,7 +255,10 @@
       const entry = Store.dayEntry(iso);
       root.appendChild(h('div.card', null, [
         h('div.card-head', null, [h('h3', null, 'Note du jour'),
-          h('button.linkbtn', { onClick: () => App.go('journal') }, 'Journal →')]),
+          h('div.inline', { style: 'gap:12px' }, [
+            h('button.linkbtn', { onClick: () => Views.openDayEditor(iso) }, '📝 Fiche du jour'),
+            h('button.linkbtn', { onClick: () => App.go('journal') }, 'Journal →')
+          ])]),
         h('textarea.input', {
           placeholder: 'Selles, comportement, observations…',
           value: entry.notes || '',

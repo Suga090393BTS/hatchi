@@ -13,7 +13,6 @@
     { key: 'veto', label: 'Véto', ic: '🏥' }
   ];
   const SELLES = ['Normales', 'Molles', 'Liquides', 'Dures', 'Aucune'];
-  const HUMEUR = ['😀 En forme', '😐 Calme', '😟 Fatigué', '🤢 Malade'];
 
   let selectedDate = Store.todayISO();
 
@@ -95,10 +94,7 @@
         h('label', null, 'Selles'),
         h('div.chip-row', null, SELLES.map((v) => chip(v, draft.selles === v, () => draft.selles = (draft.selles === v ? '' : v))))
       ]),
-      h('div.field', null, [
-        h('label', null, 'Humeur / forme'),
-        h('div.chip-row', null, HUMEUR.map((v) => chip(v, draft.humeur === v, () => draft.humeur = (draft.humeur === v ? '' : v))))
-      ]),
+      humeurField(draft),
       activitiesSection(draft),
       h('div.field', null, [h('label', null, 'Température (°C)'), h('input.input', { type: 'number', step: '0.1', value: draft.temp || '', onInput: (ev) => draft.temp = ev.target.value })]),
       h('div.field', null, [
@@ -155,6 +151,36 @@
   function chip(label, on, onToggle) {
     const el = h('button', { class: 'chip' + (on ? ' on' : ''), onClick: () => { on = !on; el.classList.toggle('on', on); onToggle(); } }, label);
     return el;
+  }
+
+  // Humeur/forme : liste modifiable (chips + ajout rapide « + » ; gestion complète dans Réglages)
+  function humeurField(draft) {
+    const wrap = h('div.field');
+    function render() {
+      UI.clear(wrap);
+      wrap.appendChild(h('label', null, 'Humeur / forme'));
+      const row = h('div.chip-row');
+      Store.moods().forEach((v) => row.appendChild(chip(v, draft.humeur === v, () => draft.humeur = (draft.humeur === v ? '' : v))));
+      let adding = false;
+      const commitAdd = (val) => {
+        if (adding) return; adding = true;
+        val = (val || '').trim();
+        if (val) { if (Store.addMood(val)) draft.humeur = val; else UI.toast('Cette humeur existe déjà'); }
+        render();
+      };
+      row.appendChild(h('button.chip', { title: 'Ajouter une humeur', onClick: (e) => {
+        e.currentTarget.disabled = true;
+        const inp = h('input.input', { placeholder: 'Ex. 😤 Nerveux — Entrée pour valider', style: 'margin-top:8px' });
+        inp.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); commitAdd(inp.value); } });
+        inp.addEventListener('blur', () => commitAdd(inp.value));
+        wrap.appendChild(inp);
+        inp.focus();
+      } }, '+'));
+      wrap.appendChild(row);
+      wrap.appendChild(h('div.muted.small', { style: 'margin-top:4px' }, 'Liste complète modifiable dans Réglages → Humeurs.'));
+    }
+    render();
+    return wrap;
   }
 
   function recentDays(n) {
@@ -347,6 +373,8 @@ ${s.settings.dogBirthdate ? `<p class="muted">Né(e) le ${UI.fmtShortYear(s.sett
     if (!w) { UI.download('resume-veto-' + dog.toLowerCase() + '.html', html, 'text/html'); UI.toast('Résumé téléchargé'); }
     setTimeout(() => URL.revokeObjectURL(url), 60000);
   }
+
+  Views.openDayEditor = openEditor; // utilisé par le tableau de bord (fiche du jour)
 
   Views.journal = {
     render(root) {
