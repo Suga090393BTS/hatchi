@@ -144,7 +144,7 @@ Avion : cabine pour les petits gabarits (selon compagnie), sinon soute pressuris
       people: seedPeople(),      // [{id, name}]
       purchases: [],             // [{id, date, items:[{ingredientId, qty}], cost}]
       cuts: seedCuts(),          // morceaux suggérés (['cuisse', 'bavette', …])
-      identity: { chipNumber: '', chipPhoto: '', identDate: '', identVet: '' }, // puce + véto identificateur
+      identity: { chipNumber: '', chipPhoto: '', identDate: '', identVet: '', prevOwner: '', prevVet: '' }, // puce, véto identificateur, ancien détenteur/véto
       vetCurrent: { name: '', phone: '', address: '' },  // vétérinaire actuel
       documents: [],             // papiers du chien : [{id, name, mime, size, dataURL, addedAt}]
       vaccinations: [],          // [{id, name, date, booster, vet, notes}]
@@ -277,8 +277,8 @@ Avion : cabine pour les petits gabarits (selon compagnie), sinon soute pressuris
     if (!Array.isArray(s.people)) s.people = seedPeople();
     if (!Array.isArray(s.purchases)) s.purchases = [];
     if (!Array.isArray(s.cuts)) s.cuts = seedCuts();
-    if (typeof s.identity !== 'object' || !s.identity) s.identity = base.identity;
-    if (typeof s.vetCurrent !== 'object' || !s.vetCurrent) s.vetCurrent = base.vetCurrent;
+    s.identity = Object.assign({}, base.identity, s.identity || {});
+    s.vetCurrent = Object.assign({}, base.vetCurrent, s.vetCurrent || {});
     if (!Array.isArray(s.documents)) s.documents = [];
     if (!Array.isArray(s.vaccinations)) s.vaccinations = [];
     if (!Array.isArray(s.healthPages)) s.healthPages = [];

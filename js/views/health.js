@@ -56,14 +56,20 @@
     const isNew = !v;
     const vet = Store.get().vetCurrent;
     let d = v ? JSON.parse(JSON.stringify(v)) : { name: '', date: Store.todayISO(), booster: '', vet: vet.name || '', notes: '' };
+    // Rappel : si non renseigné, calculé automatiquement à 1 an après l'injection (modifiable)
+    const boosterInput = h('input.input', { type: 'date', value: d.booster || '', onChange: (e) => d.booster = e.target.value });
     const body = h('div', null, [
       h('datalist', { id: 'hatchi-vaccs' }, VACC_NAMES.map((n) => h('option', { value: n }))),
       h('div.field', null, [h('label', null, 'Vaccin'),
         h('input.input', { value: d.name, list: 'hatchi-vaccs', placeholder: 'Ex. CHPPiL, Rage…', onInput: (e) => d.name = e.target.value })]),
       h('div.grid2', null, [
-        h('div.field', null, [h('label', null, 'Fait le'), h('input.input', { type: 'date', value: d.date || '', onChange: (e) => d.date = e.target.value })]),
-        h('div.field', null, [h('label', null, 'Rappel prévu le'), h('input.input', { type: 'date', value: d.booster || '', onChange: (e) => d.booster = e.target.value })])
+        h('div.field', null, [h('label', null, 'Fait le'), h('input.input', { type: 'date', value: d.date || '', onChange: (e) => {
+          d.date = e.target.value;
+          if (!d.booster && d.date) { d.booster = Store.addUnit(d.date, 1, 'ans'); boosterInput.value = d.booster; }
+        } })]),
+        h('div.field', null, [h('label', null, 'Rappel prévu le'), boosterInput])
       ]),
+      h('p.muted.small', { style: 'margin:-4px 4px 10px' }, 'Sans date de rappel, il est calculé automatiquement à 1 an (Carré, Hépatite, Parvovirose, Leptospirose, Rage…). Modifiez-le si votre véto prévoit plus tôt ou plus tard.'),
       h('div.field', null, [h('label', null, 'Vétérinaire'), h('input.input', { value: d.vet || '', placeholder: 'Qui a vacciné', onInput: (e) => d.vet = e.target.value })]),
       h('div.field', null, [h('label', null, 'Notes'), h('textarea.input', { value: d.notes || '', placeholder: 'N° de lot, réaction…', onInput: (e) => d.notes = e.target.value })]),
       h('div.modal-actions', null, [
@@ -72,6 +78,7 @@
         } }, '🗑') : h('button.btn.subtle', { onClick: () => UI.closeModal() }, 'Annuler'),
         h('button.btn', { style: 'flex:2', onClick: () => {
           if (!d.name.trim()) { UI.toast('Nom du vaccin requis'); return; }
+          if (!d.booster && d.date) d.booster = Store.addUnit(d.date, 1, 'ans'); // rappel auto à 1 an
           if (isNew) Store.addVaccination(d); else Store.updateVaccination(v.id, d);
           UI.closeModal();
         } }, 'Enregistrer')
@@ -164,6 +171,14 @@
         h('div.field', null, [h('label', null, 'Par (vétérinaire)'), h('input.input', { value: idy.identVet || '', placeholder: 'Véto de l\'identification', onChange: (e) => Store.updateIdentity({ identVet: e.target.value }) })])
       ]),
       chipPhotoField()
+    ]));
+
+    root.appendChild(h('div.section-title', null, 'Origines (avant l\'adoption)'));
+    root.appendChild(h('div.card', null, [
+      h('div.field', null, [h('label', null, 'Ancien détenteur (qui me l\'a cédée)'),
+        h('input.input', { value: idy.prevOwner || '', placeholder: 'Nom, téléphone, ville…', onChange: (e) => Store.updateIdentity({ prevOwner: e.target.value }) })]),
+      h('div.field', null, [h('label', null, 'Ancien vétérinaire (quand elle était bébé)'),
+        h('input.input', { value: idy.prevVet || '', placeholder: 'Nom / clinique de l\'ancien véto', onChange: (e) => Store.updateIdentity({ prevVet: e.target.value }) })])
     ]));
 
     root.appendChild(h('div.section-title', null, 'Vétérinaire actuel'));
