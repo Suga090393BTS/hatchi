@@ -1,5 +1,5 @@
 /* ============================================================
-   Vue Repas — repas-types + rotation hebdomadaire
+   Vue Repas — donnés (réel) + rotation (prévision) + quantités types
    ============================================================ */
 (function () {
   'use strict';
@@ -7,21 +7,21 @@
   const { h, grams } = UI;
   const { DAYS_SHORT } = UI;
 
-  let tab = 'donnes'; // 'donnes' | 'rotation' | 'types'
-  let typesSlot = 'matin'; // onglet actif dans Repas-types : 'matin' | 'soir'
-  const mealSlot = (m) => m.slot || 'matin';
-
-  /* ---------- Repas-types ---------- */
-  function mealSummary(m) {
-    return (m.items || []).map((it) => {
-      const ing = Store.ingredient(it.ingredientId);
-      if (!ing) return '';
-      return `${ing.name} ${ing.unit === 'piece' ? '×' + it.qty : grams(it.qty)}`;
-    }).filter(Boolean).join(' · ') || 'Vide';
-  }
+  let tab = 'donnes'; // 'donnes' | 'rotation' | 'quantites'
+  let typesSlot = 'matin'; // créneau actif dans Quantités : 'matin' | 'soir'
 
   const CAT_LABEL = { viande: '🥩 Viandes', abats: '🫀 Abats', os: '🦴 Os', entier: '🐔 Animaux entiers', oeuf: '🥚 Œufs', legume: '🥕 Légumes', autre: '📦 Autre' };
   const CAT_ORDER = ['viande', 'abats', 'os', 'entier', 'oeuf', 'legume', 'autre'];
+  const CAT_IC = { viande: '🥩', abats: '🫀', os: '🦴', entier: '🐔', oeuf: '🥚', legume: '🥕' };
+
+  // Résumé d'une liste d'aliments : « Poulet 300 g · Œuf ×1 »
+  function itemsSummary(items) {
+    return (items || []).map((it) => {
+      const ing = Store.ingredient(it.ingredientId);
+      if (!ing) return '';
+      return `${ing.name} ${ing.unit === 'piece' ? '×' + it.qty : grams(it.qty)}`;
+    }).filter(Boolean).join(' · ');
+  }
   const stockLabel = (i) => {
     const st = Store.stockOf(i.id);
     return st > 0 ? (i.unit === 'piece' ? '×' + st : UI.grams(st)) + ' en stock' : 'épuisé';
@@ -75,62 +75,66 @@
     ]);
   }
 
-  function openMealEditor(meal, preset) {
-    const isNew = !meal;
-    let draft = meal ? JSON.parse(JSON.stringify(meal)) : Object.assign({ name: '', slot: typesSlot, items: [] }, preset || {});
-    if (!draft.slot) draft.slot = 'matin';
-
-    const slotSeg = h('div.seg', null, [['matin', '🌅 Matin'], ['soir', '🌙 Soir']].map(([v, l]) =>
-      h('button', { class: draft.slot === v ? 'on' : '', onClick: (e) => {
-        draft.slot = v;
-        [...slotSeg.children].forEach((b) => b.classList.toggle('on', b === e.currentTarget));
-      } }, l)));
+  /* ---------- Quantités types (doses par aliment, sans nom de repas) ---------- */
+  function openDoseEditor(slot) {
+    let ingId = '', qty = '';
+    const qtyInput = h('input.input', { type: 'number', min: '0', placeholder: 'Ex. 300', value: '', onInput: (e) => qty = e.target.value });
+    const groups = CAT_ORDER.map((cat) => {
+      const list = Store.get().ingredients.filter((i) => i.category === cat);
+      return list.length ? h('optgroup', { label: CAT_LABEL[cat] }, list.map((i) => h('option', { value: i.id }, i.name))) : null;
+    }).filter(Boolean);
     const body = h('div', null, [
-      h('div.field', null, [
-        h('label', null, 'Nom du repas-type'),
-        h('input.input', { value: draft.name, placeholder: 'Ex. Poulet + os', onInput: (e) => draft.name = e.target.value })
-      ]),
-      h('div.field', null, [h('label', null, 'Repas du…'), slotSeg]),
-      h('div.field', null, [
-        h('label', null, 'Ingrédients & quantités (prévision — pas besoin d\'avoir le stock)'),
-        itemsEditor(draft, { stockOnly: false })
-      ]),
+      h('div.field', null, [h('label', null, 'Aliment'),
+        h('select.input', { onChange: (e) => { ingId = e.target.value; if (ingId && qty === '') { qty = Store.doseFor(ingId, slot); qtyInput.value = qty; } } },
+          [h('option', { value: '', selected: true, disabled: true }, 'Choisir un aliment…')].concat(groups))]),
+      h('div.field', null, [h('label', null, 'Dose type du ' + slot + ' (g, ou pièces pour œuf/os)'), qtyInput]),
       h('div.modal-actions', null, [
-        !isNew ? h('button.btn.danger', { onClick: async () => {
-          if (await UI.confirm('Supprimer ce repas-type ?', { danger: true, ok: 'Supprimer' })) { Store.removeMeal(meal.id); UI.closeModal(); }
-        } }, '🗑') : h('button.btn.subtle', { onClick: () => UI.closeModal() }, 'Annuler'),
-        h('button.btn', { style: 'flex:2', onClick: () => {
-          if (!draft.name.trim()) { UI.toast('Donnez un nom'); return; }
-          if (isNew) Store.addMeal(draft); else Store.updateMeal(meal.id, draft);
+        h('button.btn.subtle', { onClick: () => UI.closeModal() }, 'Annuler'),
+        h('button.btn', { onClick: () => {
+          if (!ingId) { UI.toast('Choisis un aliment'); return; }
+          if (!(+qty > 0)) { UI.toast('Indique une dose'); return; }
+          Store.setDose(ingId, slot, +qty);
           UI.closeModal();
         } }, 'Enregistrer')
       ])
     ]);
-    UI.modal({ title: isNew ? 'Nouveau repas-type' : 'Modifier le repas', body });
+    UI.modal({ title: 'Dose type du ' + slot, body });
   }
 
-  function typesView(root) {
+  function quantitesView(root) {
     root.appendChild(h('div.seg', { style: 'margin-bottom:12px' }, [['matin', '🌅 Matin'], ['soir', '🌙 Soir']].map(([v, l]) =>
       h('button', { class: typesSlot === v ? 'on' : '', onClick: () => { typesSlot = v; App.rerender(); } }, l))));
-    const meals = Store.get().meals.filter((m) => mealSlot(m) === typesSlot);
-    if (!meals.length) {
-      root.appendChild(h('div.card', null, UI.emptyState('🍖', 'Aucun repas-type du ' + typesSlot, 'Créez vos repas (ex. « Poulet + os », « Bœuf + courgette + œuf ») puis placez-les dans la rotation.')));
+    root.appendChild(h('p.muted.small', { style: 'margin:0 4px 10px' },
+      'Tes doses par aliment pour le ' + typesSlot + ' (prévision — le stock n\'est pas touché). Elles pré-remplissent la rotation et « J\'ai donné ».'));
+
+    const doses = Store.doses();
+    const rows = [];
+    CAT_ORDER.forEach((cat) => {
+      Store.get().ingredients.forEach((ing) => {
+        if (ing.category !== cat) return;
+        const d = doses[ing.id];
+        if (!d || d[typesSlot] == null || d[typesSlot] === '') return;
+        rows.push(h('div.row', null, [
+          h('div.row-ic', null, CAT_IC[ing.category] || '📦'),
+          h('div.row-main', null, h('strong', null, ing.name)),
+          h('div.row-end', null, h('div.inline', { style: 'gap:6px' }, [
+            h('input.input', { style: 'width:80px;text-align:right', type: 'number', min: '0', value: d[typesSlot],
+              onChange: (e) => { const v = +e.target.value; if (v > 0) Store.setDose(ing.id, typesSlot, v); } }),
+            h('span.muted.small', { style: 'width:18px' }, ing.unit === 'piece' ? 'u.' : 'g'),
+            h('button.delete-x', { onClick: async () => {
+              if (await UI.confirm('Retirer ' + ing.name + ' des doses du ' + typesSlot + ' ?', { danger: true, ok: 'Retirer' })) Store.removeDose(ing.id, typesSlot);
+            } }, '✕')
+          ]))
+        ]));
+      });
+    });
+    if (!rows.length) {
+      root.appendChild(h('div.card', null, UI.emptyState('⚖️', 'Aucune dose type du ' + typesSlot,
+        'Ex. « le matin, mon poulet c\'est 300 g, mon lapin 250 g ». Ajoute tes aliments un par un.')));
     } else {
-      root.appendChild(h('div.card.flush', null, meals.map((m) =>
-        h('div.row', { onClick: () => openMealEditor(m) }, [
-          h('div.row-ic', null, typesSlot === 'matin' ? '🌅' : '🌙'),
-          h('div.row-main', null, [h('strong', null, m.name), h('small', null, mealSummary(m))]),
-          h('div.row-end', null, h('span.muted', null, '›'))
-        ])
-      )));
+      root.appendChild(h('div.card.flush', null, rows));
     }
-    root.appendChild(h('button.btn.block', { style: 'margin-top:8px', onClick: () => openMealEditor(null) }, '+ Nouveau repas-type du ' + typesSlot));
-    // Suggestion automatique : compose un repas avec ce qui est réellement en stock
-    root.appendChild(h('button.btn.subtle.block', { style: 'margin-top:8px', onClick: () => {
-      const sug = Store.suggestMealFromStock(typesSlot);
-      if (sug.error) { UI.toast(sug.error); return; }
-      openMealEditor(null, sug);
-    } }, '✨ Composer un repas du ' + typesSlot + ' selon le stock'));
+    root.appendChild(h('button.btn.block', { style: 'margin-top:8px', onClick: () => openDoseEditor(typesSlot) }, '+ Ajouter un aliment (dose du ' + typesSlot + ')'));
   }
 
   /* ---------- Repas réellement donnés ---------- */
@@ -161,12 +165,19 @@
         draft.slot = v;
         [...slotSeg.children].forEach((b) => b.classList.toggle('on', b === e.currentTarget));
       } }, l)));
+    const itemsBoxHost = h('div', null, itemsEditor(draft, { stockOnly: true }));
     const body = h('div', null, [
       h('div.grid2', null, [
         h('div.field', null, [h('label', null, 'Date'), h('input.input', { type: 'date', value: draft.date, max: Store.todayISO(), onChange: (e) => draft.date = e.target.value })]),
         h('div.field', null, [h('label', null, 'Repas du…'), slotSeg])
       ]),
-      h('div.field', null, [h('label', null, 'Ce que j\'ai donné (selon le stock)'), itemsEditor(draft, { stockOnly: true })]),
+      h('div.field', null, [h('label', null, 'Ce que j\'ai donné (selon le stock)'), itemsBoxHost]),
+      h('button.btn.subtle.block', { style: 'margin-bottom:10px', onClick: () => {
+        const sug = Store.suggestMealFromStock(draft.slot);
+        if (sug.error) { UI.toast(sug.error); return; }
+        draft.items = sug.items;
+        UI.clear(itemsBoxHost); itemsBoxHost.appendChild(itemsEditor(draft, { stockOnly: true }));
+      } }, '✨ Suggérer selon le stock'),
       h('div.modal-actions', null, [
         existing ? h('button.btn.danger', { onClick: async () => {
           if (await UI.confirm('Supprimer ce repas ? (le stock est réintégré)', { danger: true, ok: 'Supprimer' })) { Store.removeFed(existing.id); UI.closeModal(); }
@@ -276,43 +287,55 @@
   let editWeek = 1;
 
   function slotPicker(week, dayIdx, slot, label) {
-    const ids = Store.getRotation(week, dayIdx, slot);
-    const names = ids.map((id) => { const m = Store.meal(id); return m ? m.name : null; }).filter(Boolean);
+    const items = Store.getRotation(week, dayIdx, slot);
+    const summary = itemsSummary(items);
     return h('div', {
       style: 'flex:1;cursor:pointer', onClick: () => openSlotPicker(week, dayIdx, slot, label)
     }, [
       h('div.muted.small', { style: 'font-weight:700' }, label),
-      names.length
-        ? h('div.small', null, names.join(', '))
-        : h('div.muted.small', { style: 'opacity:.6' }, '+ choisir')
+      summary
+        ? h('div.small', null, summary)
+        : h('div.muted.small', { style: 'opacity:.6' }, '+ composer')
     ]);
   }
 
+  // Composition d'un créneau de rotation : aliment par aliment, doses types pré-remplies
   function openSlotPicker(week, dayIdx, slot, label) {
-    const all = Store.get().meals;
-    // les repas du bon créneau d'abord, les autres ensuite
-    const meals = all.filter((m) => mealSlot(m) === slot).concat(all.filter((m) => mealSlot(m) !== slot));
-    let selected = new Set(Store.getRotation(week, dayIdx, slot));
-    if (!meals.length) {
-      UI.toast('Créez d\'abord des repas-types');
-      tab = 'types'; App.rerender(); return;
+    const sel = new Map(Store.getRotation(week, dayIdx, slot).map((it) => [it.ingredientId, it.qty]));
+    const hasDose = (ing) => { const d = Store.doses()[ing.id]; return d && d[slot] != null && d[slot] !== ''; };
+    // sa petite liste (doses types du créneau) d'abord, puis le reste du catalogue
+    const ings = [];
+    CAT_ORDER.forEach((cat) => Store.get().ingredients.forEach((i) => { if (i.category === cat && hasDose(i)) ings.push(i); }));
+    CAT_ORDER.forEach((cat) => Store.get().ingredients.forEach((i) => { if (i.category === cat && !hasDose(i)) ings.push(i); }));
+
+    const list = h('div');
+    function render() {
+      UI.clear(list);
+      let sepDone = false;
+      ings.forEach((ing, i) => {
+        if (!sepDone && !hasDose(ing) && ings.some(hasDose)) { sepDone = true; list.appendChild(h('div.muted.small', { style: 'margin:8px 2px 6px;font-weight:700' }, 'Autres aliments')); }
+        const on = sel.has(ing.id);
+        list.appendChild(h('div.inline', { style: 'margin-bottom:6px' }, [
+          h('button', {
+            class: 'chip' + (on ? ' on' : ''), style: 'flex:1;justify-content:flex-start',
+            onClick: () => { if (on) sel.delete(ing.id); else sel.set(ing.id, Store.doseFor(ing.id, slot)); render(); }
+          }, [h('span', null, (CAT_IC[ing.category] || '📦') + ' ' + ing.name)]),
+          on ? h('input.input', { style: 'width:80px;text-align:right', type: 'number', min: '0', value: sel.get(ing.id), onInput: (e) => sel.set(ing.id, +e.target.value || 0) }) : null,
+          on ? h('span.muted.small', { style: 'width:18px' }, ing.unit === 'piece' ? 'u.' : 'g') : null
+        ]));
+      });
     }
-    const list = h('div.chip-row', { style: 'flex-direction:column;align-items:stretch' },
-      meals.map((m) => {
-        const btn = h('button', {
-          class: 'chip' + (selected.has(m.id) ? ' on' : ''),
-          style: 'justify-content:space-between',
-          onClick: () => { selected.has(m.id) ? selected.delete(m.id) : selected.add(m.id); btn.classList.toggle('on', selected.has(m.id)); }
-        }, [h('span', null, m.name), h('span.small', { style: 'opacity:.8' }, mealSummary(m))]);
-        return btn;
-      })
-    );
+    render();
+
     const body = h('div', null, [
-      h('p.muted.small', { style: 'margin:0 4px 10px' }, `${UI.DAYS[dayIdx]} · ${label} · Semaine ${week}`),
-      list,
+      h('p.muted.small', { style: 'margin:0 4px 10px' }, `${UI.DAYS[dayIdx]} · ${label} · Semaine ${week} — coche tes aliments, les doses types se pré-remplissent.`),
+      h('div', { style: 'max-height:48vh;overflow-y:auto' }, list),
       h('div.modal-actions', null, [
         h('button.btn.subtle', { onClick: () => UI.closeModal() }, 'Annuler'),
-        h('button.btn', { onClick: () => { Store.setRotation(week, dayIdx, slot, [...selected]); UI.closeModal(); } }, 'Valider')
+        h('button.btn', { onClick: () => {
+          Store.setRotation(week, dayIdx, slot, [...sel].map(([ingredientId, qty]) => ({ ingredientId, qty })));
+          UI.closeModal();
+        } }, 'Valider')
       ])
     ]);
     UI.modal({ title: 'Repas du ' + UI.DAYS[dayIdx].toLowerCase(), body });
@@ -328,12 +351,12 @@
         h('span', { style: 'font-size:26px' }, '✨'),
         h('div', { style: 'flex:1' }, [
           h('strong', null, 'Rotation 4 semaines « bien-être »'),
-          h('div.small.muted', null, 'Protéines variées sur le mois, poisson 1×/semaine, abats et os répartis — à partir de vos repas du tableau HATCHI 2026. Modifiable ensuite.')
+          h('div.small.muted', null, 'Protéines variées sur le mois, poisson 1×/semaine, abats et os répartis — aliments et doses de votre tableau HATCHI 2026. Modifiable ensuite, jour par jour.')
         ])
       ]),
       h('button.btn.block', { style: 'margin-top:12px', onClick: async () => {
         if (await UI.confirm(rotationEmpty
-          ? 'Charger la rotation 4 semaines (crée les repas-types et remplit les 4 semaines) ?'
+          ? 'Charger la rotation 4 semaines ?'
           : 'Charger la rotation 4 semaines ? Elle remplace la rotation actuelle.', { ok: 'Charger' })) {
           Store.loadExampleRotation(); UI.toast('Rotation 4 semaines chargée ✓');
         }
@@ -397,11 +420,11 @@
       root.appendChild(h('div.seg', { style: 'margin-bottom:14px;flex-wrap:wrap;justify-content:center' }, [
         h('button', { class: tab === 'donnes' ? 'on' : '', onClick: () => { tab = 'donnes'; App.rerender(); } }, '🍽 Donnés'),
         h('button', { class: tab === 'rotation' ? 'on' : '', onClick: () => { tab = 'rotation'; App.rerender(); } }, 'Rotation'),
-        h('button', { class: tab === 'types' ? 'on' : '', onClick: () => { tab = 'types'; App.rerender(); } }, 'Repas-types')
+        h('button', { class: tab === 'quantites' ? 'on' : '', onClick: () => { tab = 'quantites'; App.rerender(); } }, '⚖️ Quantités')
       ]));
       if (tab === 'donnes') donnesView(root);
       else if (tab === 'rotation') rotationView(root);
-      else typesView(root);
+      else quantitesView(root);
     }
   };
 })();

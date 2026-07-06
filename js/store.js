@@ -160,8 +160,9 @@ Avion : cabine pour les petits gabarits (selon compagnie), sinon soute pressuris
         spaceId: 'hatchi'
       },
       ingredients: seedIngredients(),
-      meals: [],                 // repas-types : {id,name,items:[{ingredientId,qty}]}
-      rotation: {},              // clé "w{week}-{dayIdx}-{slot}" => [mealId...]  (slot: 'matin'|'soir')
+      meals: [],                 // (hérité) anciens repas-types nommés
+      doses: {},                 // quantités types par aliment : ingredientId => {matin: qty, soir: qty}
+      rotation: {},              // clé "w{week}-{dayIdx}-{slot}" => [{ingredientId, qty}...]  (slot: 'matin'|'soir')
       treatments: seedTreatments(),
       journal: {},               // dateISO => {repasMatin,repasSoir,selles,humeur,sorties:{},who:{},promeneur,temp,soins:[],notes,photo}
       weights: [],               // [{id, date, kg}]
@@ -223,11 +224,6 @@ Avion : cabine pour les petits gabarits (selon compagnie), sinon soute pressuris
       for (let i = 0; i < n; i++) { const d = new Date(base); d.setDate(d.getDate() + i); out.push(isoLocal(d)); }
     }
     return out;
-  }
-  function applyMealsToStock(s, meals, sign) {
-    meals.forEach((m) => (m.items || []).forEach((it) => {
-      s.stock[it.ingredientId] = (s.stock[it.ingredientId] || 0) + sign * (it.qty || 0);
-    }));
   }
 
   /* ---------- State management ---------- */
@@ -384,6 +380,33 @@ Avion : cabine pour les petits gabarits (selon compagnie), sinon soute pressuris
         });
       });
       s.seeded.pharmacyV2 = true;
+    }
+    // Rotation v2 : les créneaux stockent directement les aliments+quantités (plus de repas nommés)
+    if (typeof s.doses !== 'object' || !s.doses) s.doses = {};
+    if (!s.seeded.rotationItems) {
+      Object.keys(s.rotation).forEach((k) => {
+        const v = s.rotation[k] || [];
+        if (v.length && typeof v[0] === 'string') {
+          const items = [];
+          v.forEach((mid) => {
+            const m = s.meals.find((x) => x.id === mid);
+            if (m) (m.items || []).forEach((x) => items.push({ ingredientId: x.ingredientId, qty: x.qty }));
+          });
+          s.rotation[k] = items;
+        }
+      });
+      s.seeded.rotationItems = true;
+    }
+    // Quantités types : dérivées une fois des anciens repas-types (modifiables dans Repas → Quantités)
+    if (!s.seeded.dosesV1) {
+      s.meals.forEach((m) => {
+        const slot = m.slot === 'soir' ? 'soir' : 'matin';
+        (m.items || []).forEach((it) => {
+          const d = s.doses[it.ingredientId] || (s.doses[it.ingredientId] = {});
+          if (d[slot] == null) d[slot] = it.qty;
+        });
+      });
+      s.seeded.dosesV1 = true;
     }
     // Fiches du carnet de référence : seedées une fois (modifiables/supprimables ensuite)
     if (!s.seeded.healthPages) {
@@ -545,11 +568,38 @@ Avion : cabine pour les petits gabarits (selon compagnie), sinon soute pressuris
       });
     },
 
-    /* ---- Rotation ---- */
+    /* ---- Quantités types (doses par aliment, par créneau) ---- */
+    doses: () => state.doses,
+    // Dose type d'un aliment pour un créneau ; à défaut, valeur raisonnable selon la catégorie
+    doseFor(ingId, slot) {
+      const d = state.doses[ingId];
+      if (d && d[slot] != null && d[slot] !== '') return d[slot];
+      const ing = this.ingredient(ingId);
+      if (!ing) return 100;
+      if (ing.unit === 'piece') return 1;
+      if (ing.category === 'viande' || ing.category === 'entier') return slot === 'soir' ? 400 : 300;
+      if (ing.category === 'abats') return 200;
+      return 100;
+    },
+    setDose(ingId, slot, qty) { commit((s) => { const d = s.doses[ingId] || (s.doses[ingId] = {}); d[slot] = qty; }); },
+    removeDose(ingId, slot) {
+      commit((s) => {
+        const d = s.doses[ingId];
+        if (d) { delete d[slot]; if (!Object.keys(d).length) delete s.doses[ingId]; }
+      });
+    },
+
+    /* ---- Rotation (les créneaux contiennent directement les aliments + quantités) ---- */
     rotationKey: (week, dayIdx, slot) => `w${week}-${dayIdx}-${slot}`,
-    getRotation(week, dayIdx, slot) { return state.rotation[`w${week}-${dayIdx}-${slot}`] || []; },
-    setRotation(week, dayIdx, slot, mealIds) {
-      commit((s) => { s.rotation[`w${week}-${dayIdx}-${slot}`] = mealIds.slice(); });
+    getRotation(week, dayIdx, slot) {
+      return (state.rotation[`w${week}-${dayIdx}-${slot}`] || []).filter((x) => x && typeof x === 'object');
+    },
+    setRotation(week, dayIdx, slot, items) {
+      commit((s) => {
+        s.rotation[`w${week}-${dayIdx}-${slot}`] = (items || [])
+          .filter((it) => it.ingredientId && it.qty > 0)
+          .map((it) => ({ ingredientId: it.ingredientId, qty: +it.qty }));
+      });
     },
 
     // Quelle semaine de cycle + quel jour pour une date donnée
@@ -562,10 +612,10 @@ Avion : cabine pour les petits gabarits (selon compagnie), sinon soute pressuris
       const dayIdx = (new Date(iso + 'T00:00:00').getDay() + 6) % 7; // 0=lundi
       return { week: week + 1, dayIdx };
     },
-    mealsForDay(iso, slot) {
+    // Aliments prévus par la rotation pour une date/créneau : [{ingredientId, qty}]
+    itemsForDay(iso, slot) {
       const { week, dayIdx } = this.cyclePosition(iso);
-      const ids = this.getRotation(week, dayIdx, slot);
-      return ids.map((id) => this.meal(id)).filter(Boolean);
+      return this.getRotation(week, dayIdx, slot);
     },
 
     /* ---- Traitements ---- */
@@ -679,22 +729,22 @@ Avion : cabine pour les petits gabarits (selon compagnie), sinon soute pressuris
     },
     dayPlannedGrams(iso) {
       let g = 0;
-      ['matin', 'soir'].forEach((slot) => this.mealsForDay(iso, slot).forEach((m) =>
-        (m.items || []).forEach((it) => { const ing = this.ingredient(it.ingredientId); if (ing && ing.unit === 'g') g += (it.qty || 0); })));
+      ['matin', 'soir'].forEach((slot) => this.itemsForDay(iso, slot).forEach((it) => {
+        const ing = this.ingredient(it.ingredientId); if (ing && ing.unit === 'g') g += (it.qty || 0);
+      }));
       return g;
     },
     // Répartition BARF sur une plage ('week' = semaine en cours, 'month' = 30 j)
     barfBalance(range) {
       const acc = { muscle: 0, os: 0, abats: 0, legume: 0, autre: 0, osPieces: 0 };
       listDates(range || 'week', {}).forEach((iso) => {
-        ['matin', 'soir'].forEach((slot) => this.mealsForDay(iso, slot).forEach((m) =>
-          (m.items || []).forEach((it) => {
-            const ing = this.ingredient(it.ingredientId);
-            if (!ing) return;
-            const cls = barfClass(ing);
-            if (ing.unit === 'piece') { if (cls === 'os') acc.osPieces += (it.qty || 0); else acc[cls] += 0; }
-            else acc[cls] += (it.qty || 0);
-          })));
+        ['matin', 'soir'].forEach((slot) => this.itemsForDay(iso, slot).forEach((it) => {
+          const ing = this.ingredient(it.ingredientId);
+          if (!ing) return;
+          const cls = barfClass(ing);
+          if (ing.unit === 'piece') { if (cls === 'os') acc.osPieces += (it.qty || 0); }
+          else acc[cls] += (it.qty || 0);
+        }));
       });
       const base = acc.muscle + acc.abats; // muscle vs abats (os en pièces géré à part)
       acc.musclePct = base ? Math.round(acc.muscle / base * 100) : 0;
@@ -710,8 +760,9 @@ Avion : cabine pour les petits gabarits (selon compagnie), sinon soute pressuris
     needs(range) {
       const totals = {};
       listDates(range || 'week', {}).forEach((iso) => {
-        ['matin', 'soir'].forEach((slot) => this.mealsForDay(iso, slot).forEach((m) =>
-          (m.items || []).forEach((it) => { totals[it.ingredientId] = (totals[it.ingredientId] || 0) + (it.qty || 0); })));
+        ['matin', 'soir'].forEach((slot) => this.itemsForDay(iso, slot).forEach((it) => {
+          totals[it.ingredientId] = (totals[it.ingredientId] || 0) + (it.qty || 0);
+        }));
       });
       return totals;
     },
@@ -984,69 +1035,52 @@ Avion : cabine pour les petits gabarits (selon compagnie), sinon soute pressuris
       return acc;
     },
 
-    // Marquer un repas donné + déduire/réintégrer le stock (idempotent)
-    setMealGiven(iso, slot, given) {
-      const meals = this.mealsForDay(iso, slot);
-      commit((s) => {
-        const day = s.journal[iso] || { sorties: {}, soins: [] };
-        const key = slot === 'matin' ? 'repasMatin' : 'repasSoir';
-        const dedKey = slot === 'matin' ? '_dedMatin' : '_dedSoir';
-        day[key] = given;
-        if (given && !day[dedKey]) { applyMealsToStock(s, meals, -1); day[dedKey] = true; }
-        else if (!given && day[dedKey]) { applyMealsToStock(s, meals, +1); day[dedKey] = false; }
-        s.journal[iso] = day;
-      });
-    },
-
     /* ---- Rotation type 4 semaines (base : tableau « Ex S1 » du sheet HATCHI 2026) ----
        Bien-être : rotation des protéines sur le mois (poulet/dinde/bœuf/agneau/lapin/saumon/broutard),
        poisson 1×/semaine (oméga-3), abats 3×200 g et 3 os par semaine, légumes variés. */
     loadExampleRotation() {
       commit((s) => {
-        const M = ensureSheetMeals(s);
-        // 4 semaines × 7 jours (0=lundi … 6=dimanche), matin / soir
+        const byName = {};
+        s.ingredients.forEach((i) => { byName[i.name] = i.id; });
+        const it = (n, q) => byName[n] ? { ingredientId: byName[n], qty: q } : null;
+        const D = (arr) => arr.filter(Boolean);
+        // aliments (matin : viande 300 g ; soir : 300-500 g)
+        const P = (q) => it('Poulet (filet)', q), DI = (q) => it('Dinde', q), B = (q) => it('Bœuf', q),
+          A = (q) => it('Agneau', q), LA = (q) => it('Lapin', q), SA = (q) => it('Saumon', q), CB = (q) => it('Côte de broutard', q);
+        const OEUF = () => it('Œuf', 1), OS = () => it('Os charnu', 1), AB = () => it('Abats (lot)', 200);
+        const L = (n, q) => it(n, q || 100);
+        // menus réutilisés (composés d'aliments, pas de repas nommés)
+        const m = {
+          pOeufCar: () => D([P(300), OEUF(), L('Carotte', 200)]),
+          pCar: () => D([P(300), L('Carotte')]),
+          dCour: () => D([DI(300), L('Courgette')]),
+          pOsHar: () => D([P(300), OS(), L('Haricot vert')]),
+          dBro: () => D([DI(300), L('Brocoli')]),
+          pEpi: () => D([P(300), L('Épinard')]),
+          dOsCour: () => D([DI(300), OS(), L('Courgette')]),
+          laCar: () => D([LA(300), L('Carotte')]),
+          dAbBro: () => D([DI(300), AB(), L('Brocoli')]),
+          bOsOeufHar: () => D([B(400), OS(), OEUF(), L('Haricot vert')]),
+          bAbPot: () => D([B(300), AB(), L('Potiron')]),
+          aOeufCour: () => D([A(400), OEUF(), L('Courgette')]),
+          aOeufCar: () => D([A(500), OEUF(), L('Carotte')]),
+          pAbPois: () => D([P(500), AB(), L('Petit pois')]),
+          bOeufPat: () => D([B(400), OEUF(), L('Patate douce')]),
+          laAbEpi: () => D([LA(300), AB(), L('Épinard')]),
+          saCour: () => D([SA(400), L('Courgette')]),
+          cbBro: () => D([CB(400), L('Brocoli')])
+        };
+        // 4 semaines × 7 jours (0=lundi … 6=dimanche)
         const weeks = [
-          { // Semaine 1 — la semaine Ex S1 telle quelle
-            0: { matin: M.pouletOeufCarotte, soir: M.dindeAbatsBrocoli },
-            1: { matin: M.pouletCarotte,     soir: M.boeufOsOeufHaricots },
-            2: { matin: M.dindeCourgette,    soir: M.boeufAbatsPotiron },
-            3: { matin: M.pouletOsHaricots,  soir: M.agneauOeufCourgette },
-            4: { matin: M.dindeBrocoli,      soir: M.agneauOeufCarotte },
-            5: { matin: M.pouletEpinards,    soir: M.pouletAbatsPetitsPois },
-            6: { matin: M.dindeOsCourgette,  soir: M.boeufOeufPatateDouce }
-          },
-          { // Semaine 2 — lapin + saumon
-            0: { matin: M.dindeBrocoli,      soir: M.lapinAbatsEpinards },
-            1: { matin: M.pouletOsHaricots,  soir: M.saumonCourgette },
-            2: { matin: M.lapinCarotte,      soir: M.boeufOeufPatateDouce },
-            3: { matin: M.dindeCourgette,    soir: M.boeufAbatsPotiron },
-            4: { matin: M.pouletOeufCarotte, soir: M.agneauOeufCourgette },
-            5: { matin: M.dindeOsCourgette,  soir: M.pouletAbatsPetitsPois },
-            6: { matin: M.pouletEpinards,    soir: M.boeufOsOeufHaricots }
-          },
-          { // Semaine 3 — côte de broutard + saumon
-            0: { matin: M.pouletCarotte,     soir: M.coteBroutardBrocoli },
-            1: { matin: M.dindeCourgette,    soir: M.pouletAbatsPetitsPois },
-            2: { matin: M.pouletOsHaricots,  soir: M.agneauOeufCarotte },
-            3: { matin: M.lapinCarotte,      soir: M.dindeAbatsBrocoli },
-            4: { matin: M.dindeOsCourgette,  soir: M.saumonCourgette },
-            5: { matin: M.pouletOeufCarotte, soir: M.boeufAbatsPotiron },
-            6: { matin: M.pouletEpinards,    soir: M.boeufOsOeufHaricots }
-          },
-          { // Semaine 4 — mélange de tout
-            0: { matin: M.dindeCourgette,    soir: M.boeufOeufPatateDouce },
-            1: { matin: M.pouletCarotte,     soir: M.lapinAbatsEpinards },
-            2: { matin: M.pouletOsHaricots,  soir: M.dindeAbatsBrocoli },
-            3: { matin: M.dindeBrocoli,      soir: M.saumonCourgette },
-            4: { matin: M.pouletOeufCarotte, soir: M.coteBroutardBrocoli },
-            5: { matin: M.dindeOsCourgette,  soir: M.boeufAbatsPotiron },
-            6: { matin: M.pouletEpinards,    soir: M.boeufOsOeufHaricots }
-          }
+          { 0: [m.pOeufCar, m.dAbBro], 1: [m.pCar, m.bOsOeufHar], 2: [m.dCour, m.bAbPot], 3: [m.pOsHar, m.aOeufCour], 4: [m.dBro, m.aOeufCar], 5: [m.pEpi, m.pAbPois], 6: [m.dOsCour, m.bOeufPat] },
+          { 0: [m.dBro, m.laAbEpi], 1: [m.pOsHar, m.saCour], 2: [m.laCar, m.bOeufPat], 3: [m.dCour, m.bAbPot], 4: [m.pOeufCar, m.aOeufCour], 5: [m.dOsCour, m.pAbPois], 6: [m.pEpi, m.bOsOeufHar] },
+          { 0: [m.pCar, m.cbBro], 1: [m.dCour, m.pAbPois], 2: [m.pOsHar, m.aOeufCar], 3: [m.laCar, m.dAbBro], 4: [m.dOsCour, m.saCour], 5: [m.pOeufCar, m.bAbPot], 6: [m.pEpi, m.bOsOeufHar] },
+          { 0: [m.dCour, m.bOeufPat], 1: [m.pCar, m.laAbEpi], 2: [m.pOsHar, m.dAbBro], 3: [m.dBro, m.saCour], 4: [m.pOeufCar, m.cbBro], 5: [m.dOsCour, m.bAbPot], 6: [m.pEpi, m.bOsOeufHar] }
         ];
         weeks.forEach((plan, w) => {
           for (let d = 0; d < 7; d++) {
-            s.rotation[`w${w + 1}-${d}-matin`] = [plan[d].matin];
-            s.rotation[`w${w + 1}-${d}-soir`] = [plan[d].soir];
+            s.rotation[`w${w + 1}-${d}-matin`] = plan[d][0]();
+            s.rotation[`w${w + 1}-${d}-soir`] = plan[d][1]();
           }
         });
         s.settings.cycleWeeks = 4;

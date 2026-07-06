@@ -13,23 +13,8 @@
     { key: 'veto', label: 'Véto', ic: '🏥' }
   ];
 
-  function mealLines(meals) {
-    const lines = [];
-    meals.forEach((m) => {
-      (m.items || []).forEach((it) => {
-        const ing = Store.ingredient(it.ingredientId);
-        if (!ing) return;
-        lines.push(h('div.meal-line', null, [
-          h('span', null, ing.name),
-          h('span.q', null, ing.unit === 'piece' ? `×${it.qty}` : grams(it.qty))
-        ]));
-      });
-    });
-    return lines;
-  }
-
-  function fedLines(e) {
-    return e.items.map((it) => {
+  function itemLines(items) {
+    return (items || []).map((it) => {
       const ing = Store.ingredient(it.ingredientId);
       if (!ing) return null;
       return h('div.meal-line', null, [
@@ -40,21 +25,20 @@
   }
 
   function mealSlot(slot, label, ic, iso) {
-    const planned = Store.mealsForDay(iso, slot);
+    const planned = Store.itemsForDay(iso, slot);
     const fed = Store.fedForSlot(iso, slot);
     const entry = Store.dayEntry(iso);
     const done = !!fed || !!entry[slot === 'matin' ? 'repasMatin' : 'repasSoir'];
     // le prévu de la rotation sert de pré-remplissage — modifiable librement à la saisie
-    const presetItems = [];
-    planned.forEach((m) => (m.items || []).forEach((it) => presetItems.push({ ingredientId: it.ingredientId, qty: it.qty })));
+    const presetItems = planned.map((it) => ({ ingredientId: it.ingredientId, qty: it.qty }));
 
     return h('div', { class: 'meal-slot' + (done ? ' done' : '') }, [
       h('div.slot-label', null, [h('span', null, ic), h('span', null, label),
         done ? h('span.badge.ok', { style: 'margin-left:auto' }, '✓ donné') : null]),
       h('div.slot-body', null,
-        fed ? fedLines(fed)
+        fed ? itemLines(fed.items)
             : planned.length
-              ? [h('div.muted.small', { style: 'margin-bottom:4px' }, 'Suggestion (rotation) :')].concat(mealLines(planned))
+              ? [h('div.muted.small', { style: 'margin-bottom:4px' }, 'Suggestion (rotation) :')].concat(itemLines(planned))
               : h('div.muted.small', null, 'Note ce que tu donnes, même sans planification.')),
       fed
         ? h('button.btn.sm.subtle', { style: 'margin-top:12px;width:100%', onClick: () => Views.openFedEditor(fed) }, 'Modifier ce qui a été donné')
