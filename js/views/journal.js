@@ -273,12 +273,16 @@
       const isToday = iso === todayISO;
       const isFuture = iso > todayISO;
       const dots = entryDots(iso);
+      // smiley de l'humeur du jour, en haut à droite de la case
+      const emo = (Store.dayEntry(iso).humeur || '').split(' ')[0];
+      const showEmo = emo && /\p{Extended_Pictographic}/u.test(emo);
       cells.push(h('button', {
         class: 'cal-cell' + (isToday ? ' today' : ''),
         disabled: isFuture,
         style: isFuture ? 'opacity:.35' : '',
         onClick: () => { if (!isFuture) openEditor(iso); }
       }, [
+        showEmo ? h('span', { style: 'position:absolute;top:1px;right:2px;font-size:9px;line-height:1;opacity:.95' }, emo) : null,
         h('span', null, String(day)),
         h('div.cal-dots', null, dots.map((c) => h('i', { style: `background:${c}` })))
       ]));
