@@ -22,8 +22,9 @@
     if (e.repasMatin) tags.push('🌅');
     if (e.repasSoir) tags.push('🌙');
     SORTIES.forEach((s) => { if (e.sorties && e.sorties[s.key]) tags.push(s.ic); });
+    if (e.meds && e.meds.length) tags.push('💊');
     if (e.photo) tags.push('📷');
-    const hasContent = e.notes || e.selles || e.humeur || tags.length || (e.soins && e.soins.length) || e.photo;
+    const hasContent = e.notes || e.selles || e.humeur || tags.length || (e.soins && e.soins.length) || e.photo || (e.meds && e.meds.length);
     return h('div.row', { onClick: () => openEditor(iso) }, [
       h('div.row-ic', null, new Date(iso + 'T00:00:00').getDate()),
       h('div.row-main', null, [
@@ -95,6 +96,7 @@
         h('div.chip-row', null, SELLES.map((v) => chip(v, draft.selles === v, () => draft.selles = (draft.selles === v ? '' : v))))
       ]),
       humeurField(draft),
+      medsField(draft),
       activitiesSection(draft),
       h('div.field', null, [h('label', null, 'Température (°C)'), h('input.input', { type: 'number', step: '0.1', value: draft.temp || '', onInput: (ev) => draft.temp = ev.target.value })]),
       h('div.field', null, [
@@ -104,7 +106,10 @@
       photoField(draft),
       h('div.modal-actions', null, [
         h('button.btn.subtle', { onClick: () => UI.closeModal() }, 'Annuler'),
-        h('button.btn', { onClick: () => { Store.updateDay(iso, draft); UI.closeModal(); UI.toast('Journée enregistrée'); } }, 'Enregistrer')
+        h('button.btn', { onClick: () => {
+          draft.meds = (draft.meds || []).filter((m) => (m.name || '').trim() || (m.dose || '').trim());
+          Store.updateDay(iso, draft); UI.closeModal(); UI.toast('Journée enregistrée');
+        } }, 'Enregistrer')
       ])
     ]);
     UI.modal({ title: fmtLong(iso), body });
@@ -151,6 +156,27 @@
   function chip(label, on, onToggle) {
     const el = h('button', { class: 'chip' + (on ? ' on' : ''), onClick: () => { on = !on; el.classList.toggle('on', on); onToggle(); } }, label);
     return el;
+  }
+
+  // Malade ? Médicaments & soins donnés ce jour-là (ex. Biseptine 2×/jour sur la patte)
+  function medsField(draft) {
+    const wrap = h('div.field');
+    function render() {
+      UI.clear(wrap);
+      wrap.appendChild(h('label', null, '💊 Malade ? Médicaments & soins donnés'));
+      draft.meds = draft.meds || [];
+      if (!draft.meds.length) wrap.appendChild(h('div.muted.small', { style: 'margin-bottom:6px' }, 'Note ici ce que tu lui donnes ou appliques (médicament, Biseptine, pommade…) avec la posologie.'));
+      draft.meds.forEach((m, idx) => {
+        wrap.appendChild(h('div.inline', { style: 'margin-bottom:8px;align-items:flex-start' }, [
+          h('input.input', { style: 'flex:1.1', placeholder: 'Ex. Biseptine', value: m.name || '', onInput: (e) => m.name = e.target.value }),
+          h('input.input', { style: 'flex:1.5', placeholder: 'Posologie / où (ex. 2×/jour sur la patte)', value: m.dose || '', onInput: (e) => m.dose = e.target.value }),
+          h('button.delete-x', { onClick: () => { draft.meds.splice(idx, 1); render(); } }, '✕')
+        ]));
+      });
+      wrap.appendChild(h('button.btn.ghost.sm', { onClick: () => { draft.meds.push({ name: '', dose: '' }); render(); } }, '+ Médicament / soin donné'));
+    }
+    render();
+    return wrap;
   }
 
   // Humeur/forme : liste modifiable (chips + ajout rapide « + » ; gestion complète dans Réglages)
@@ -347,9 +373,10 @@
     days.forEach((iso) => {
       const e = Store.dayEntry(iso);
       const sorties = SORTIES.filter((x) => e.sorties && e.sorties[x.key]).map((x) => x.label).join(', ');
-      const has = e.selles || e.humeur || e.notes || e.temp || sorties;
+      const meds = (e.meds || []).map((m) => m.name + (m.dose ? ' (' + m.dose + ')' : '')).join(', ');
+      const has = e.selles || e.humeur || e.notes || e.temp || sorties || meds;
       if (!has) return;
-      rows.push(`<tr><td>${UI.fmtShortYear(iso)}</td><td>${esc(e.selles)}</td><td>${esc((e.humeur || '').replace(/^[^ ]+ /, ''))}</td><td>${esc(e.temp ? e.temp + '°C' : '')}</td><td>${esc(sorties)}</td><td>${esc(e.notes)}</td></tr>`);
+      rows.push(`<tr><td>${UI.fmtShortYear(iso)}</td><td>${esc(e.selles)}</td><td>${esc((e.humeur || '').replace(/^[^ ]+ /, ''))}</td><td>${esc(e.temp ? e.temp + '°C' : '')}</td><td>${esc(meds)}</td><td>${esc(sorties)}</td><td>${esc(e.notes)}</td></tr>`);
     });
     const weights = Store.weightsSorted().filter((w) => days.includes(w.date));
     const treatRows = s.treatments.map((t) => {
@@ -366,7 +393,7 @@ ${s.settings.dogBirthdate ? `<p class="muted">Né(e) le ${UI.fmtShortYear(s.sett
 <button onclick="window.print()" style="padding:10px 16px;background:#1f6f5c;color:#fff;border:0;border-radius:8px;font-weight:700;cursor:pointer">Imprimer / PDF</button>
 <h2>Poids</h2>${weights.length ? '<table><tr><th>Date</th><th>Poids</th></tr>' + weights.map((w) => `<tr><td>${UI.fmtShortYear(w.date)}</td><td>${w.kg} kg</td></tr>`).join('') + '</table>' : '<p class="muted">Aucune pesée sur la période.</p>'}
 <h2>Traitements</h2><table><tr><th>Soin</th><th>Dernier</th><th>Prochain</th><th>Faits (période)</th></tr>${treatRows}</table>
-<h2>Journal</h2>${rows.length ? '<table><tr><th>Date</th><th>Selles</th><th>Humeur</th><th>T°</th><th>Sorties</th><th>Notes</th></tr>' + rows.join('') + '</table>' : '<p class="muted">Aucune note sur la période.</p>'}
+<h2>Journal</h2>${rows.length ? '<table><tr><th>Date</th><th>Selles</th><th>Humeur</th><th>T°</th><th>Médicaments / soins</th><th>Sorties</th><th>Notes</th></tr>' + rows.join('') + '</table>' : '<p class="muted">Aucune note sur la période.</p>'}
 </body></html>`;
     const url = URL.createObjectURL(new Blob([html], { type: 'text/html' }));
     const w = window.open(url, '_blank');

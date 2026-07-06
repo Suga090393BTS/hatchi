@@ -245,11 +245,11 @@
       root.appendChild(h('div.section-title', null, 'Rappels soins'));
       root.appendChild(reminders(iso));
 
-      const soins = todaySoins(iso);
-      if (soins) { root.appendChild(h('div.section-title', null, 'À faire')); root.appendChild(soins); }
-
       root.appendChild(h('div.section-title', null, 'Activités'));
       root.appendChild(sortiesCard(iso));
+
+      const soins = todaySoins(iso);
+      if (soins) { root.appendChild(h('div.section-title', null, 'À faire')); root.appendChild(soins); }
 
       // Note rapide du jour
       const entry = Store.dayEntry(iso);
