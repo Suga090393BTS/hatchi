@@ -20,29 +20,50 @@
     }).filter(Boolean).join(' · ') || 'Vide';
   }
 
-  function openMealEditor(meal) {
+  const CAT_LABEL = { viande: '🥩 Viandes', abats: '🫀 Abats', os: '🦴 Os', entier: '🐔 Animaux entiers', oeuf: '🥚 Œufs', legume: '🥕 Légumes', autre: '📦 Autre' };
+  const CAT_ORDER = ['viande', 'abats', 'os', 'entier', 'oeuf', 'legume', 'autre'];
+  const stockLabel = (i) => {
+    const st = Store.stockOf(i.id);
+    return st > 0 ? (i.unit === 'piece' ? '×' + st : UI.grams(st)) + ' en stock' : 'épuisé';
+  };
+
+  function openMealEditor(meal, preset) {
     const isNew = !meal;
-    let draft = meal ? JSON.parse(JSON.stringify(meal)) : { name: '', slot: typesSlot, items: [] };
+    let draft = meal ? JSON.parse(JSON.stringify(meal)) : Object.assign({ name: '', slot: typesSlot, items: [] }, preset || {});
     if (!draft.slot) draft.slot = 'matin';
 
     const itemsBox = h('div');
     function renderItems() {
       UI.clear(itemsBox);
-      if (!draft.items.length) itemsBox.appendChild(h('div.muted.small', { style: 'padding:6px 2px' }, 'Aucun ingrédient. Ajoutez-en ci-dessous.'));
+      if (!draft.items.length) itemsBox.appendChild(h('div.muted.small', { style: 'padding:6px 2px' }, 'Aucun ingrédient. Composez avec les boutons ci-dessous (seul ce qui est en stock est proposé).'));
       draft.items.forEach((it, idx) => {
         const ing = Store.ingredient(it.ingredientId);
+        // ingrédients en stock uniquement (+ celui déjà sélectionné), groupés par catégorie
+        const groups = CAT_ORDER.map((cat) => {
+          const list = Store.get().ingredients.filter((i) => i.category === cat && (Store.stockOf(i.id) > 0 || i.id === it.ingredientId));
+          return list.length ? h('optgroup', { label: CAT_LABEL[cat] }, list.map((i) =>
+            h('option', { value: i.id, selected: i.id === it.ingredientId }, i.name + ' — ' + stockLabel(i)))) : null;
+        }).filter(Boolean);
+        const over = ing && ing.unit !== 'piece' && it.qty > Store.stockOf(ing.id);
         itemsBox.appendChild(h('div.inline', { style: 'margin-bottom:8px' }, [
-          h('select.input', {
-            style: 'flex:2',
-            onChange: (e) => it.ingredientId = e.target.value
-          }, Store.get().ingredients.map((i) => h('option', { value: i.id, selected: i.id === it.ingredientId }, i.name))),
-          h('input.input', { style: 'flex:1', type: 'number', min: '0', value: it.qty, onInput: (e) => it.qty = +e.target.value || 0 }),
+          h('select.input', { style: 'flex:2', onChange: (e) => { it.ingredientId = e.target.value; renderItems(); } }, groups),
+          h('input.input', { style: 'flex:1' + (over ? ';border-color:var(--red)' : ''), type: 'number', min: '0', value: it.qty, onInput: (e) => { it.qty = +e.target.value || 0; } }),
           h('span.muted.small', { style: 'width:34px' }, ing && ing.unit === 'piece' ? 'u.' : 'g'),
           h('button.delete-x', { onClick: () => { draft.items.splice(idx, 1); renderItems(); } }, '✕')
         ]));
+        if (over) itemsBox.appendChild(h('div.muted.small', { style: 'color:var(--red);margin:-4px 2px 8px' }, '⚠️ Plus que ' + stockLabel(ing) + ' de ' + ing.name));
       });
     }
     renderItems();
+
+    // Boutons d'ajout par catégorie — uniquement ce qui est en stock
+    const addBtn = (cat, defQty) => h('button.btn.ghost.sm', { onClick: () => {
+      const opts = Store.get().ingredients.filter((i) => i.category === cat && Store.stockOf(i.id) > 0);
+      if (!opts.length) { UI.toast('Rien en stock dans « ' + CAT_LABEL[cat] + ' » — fais des courses d\'abord'); return; }
+      const first = opts[0];
+      draft.items.push({ ingredientId: first.id, qty: first.unit === 'piece' ? 1 : Math.min(defQty, Store.stockOf(first.id)) });
+      renderItems();
+    } }, '+ ' + CAT_LABEL[cat]);
 
     const slotSeg = h('div.seg', null, [['matin', '🌅 Matin'], ['soir', '🌙 Soir']].map(([v, l]) =>
       h('button', { class: draft.slot === v ? 'on' : '', onClick: (e) => {
@@ -56,13 +77,12 @@
       ]),
       h('div.field', null, [h('label', null, 'Repas du…'), slotSeg]),
       h('div.field', null, [
-        h('label', null, 'Ingrédients & quantités'),
+        h('label', null, 'Ingrédients & quantités (selon le stock)'),
         itemsBox,
-        h('button.btn.ghost.sm', { onClick: () => {
-          const first = Store.get().ingredients[0];
-          draft.items.push({ ingredientId: first ? first.id : '', qty: first && first.unit === 'piece' ? 1 : 100 });
-          renderItems();
-        } }, '+ Ajouter un ingrédient')
+        h('div.inline', { style: 'flex-wrap:wrap;gap:6px' }, [
+          addBtn('viande', 500), addBtn('legume', 100), addBtn('abats', 200),
+          addBtn('oeuf', 1), addBtn('os', 1), addBtn('autre', 100)
+        ])
       ]),
       h('div.modal-actions', null, [
         !isNew ? h('button.btn.danger', { onClick: async () => {
@@ -94,6 +114,12 @@
       )));
     }
     root.appendChild(h('button.btn.block', { style: 'margin-top:8px', onClick: () => openMealEditor(null) }, '+ Nouveau repas-type du ' + typesSlot));
+    // Suggestion automatique : compose un repas avec ce qui est réellement en stock
+    root.appendChild(h('button.btn.subtle.block', { style: 'margin-top:8px', onClick: () => {
+      const sug = Store.suggestMealFromStock(typesSlot);
+      if (sug.error) { UI.toast(sug.error); return; }
+      openMealEditor(null, sug);
+    } }, '✨ Composer un repas du ' + typesSlot + ' selon le stock'));
   }
 
   /* ---------- Rotation ---------- */

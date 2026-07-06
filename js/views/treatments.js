@@ -170,11 +170,13 @@
 
   Views.treatments = {
     render(root) {
-      root.appendChild(h('div.seg', { style: 'margin-bottom:14px' }, [
-        h('button', { class: tab === 'soins' ? 'on' : '', onClick: () => { tab = 'soins'; App.rerender(); } }, '💊 Traitements'),
-        h('button', { class: tab === 'poids' ? 'on' : '', onClick: () => { tab = 'poids'; App.rerender(); } }, '⚖️ Poids')
-      ]));
+      root.appendChild(h('div.seg', { style: 'margin-bottom:14px;flex-wrap:wrap;justify-content:center' }, [
+        ['soins', '💊 Soins'], ['vaccins', '💉 Vaccins'], ['identite', '🪪 Identité'], ['carnet', '📖 Carnet'], ['poids', '⚖️ Poids']
+      ].map(([v, l]) => h('button', { class: tab === v ? 'on' : '', onClick: () => { tab = v; App.rerender(); } }, l))));
       if (tab === 'poids') { weightView(root); return; }
+      if (tab === 'vaccins') { Views.health.vaccinsView(root); return; }
+      if (tab === 'identite') { Views.health.identityView(root); return; }
+      if (tab === 'carnet') { Views.health.carnetView(root); return; }
 
       const ts = Store.get().treatments.slice().sort((a, b) => {
         const da = Store.dueStatus(a).days, db = Store.dueStatus(b).days;

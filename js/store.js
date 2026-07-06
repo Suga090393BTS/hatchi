@@ -71,6 +71,54 @@
     return ['Flo', 'Fanny', 'Alex', 'Noune'].map((n) => ({ id: uid(), name: n }));
   }
 
+  // Fiches de référence du carnet (type carnet de santé vétérinaire). Modifiables/supprimables.
+  function seedHealthPages() {
+    const P = (icon, title, content) => ({ id: uid(), icon, title, content, updatedAt: todayISO() });
+    return [
+      P('💉', 'Vaccins & rappels',
+`Protocole classique (à valider avec votre vétérinaire) :
+• Primo-vaccination chiot : 8 semaines (CHP), 12 semaines (CHPL + rage si besoin), parfois 16 semaines.
+• Rappel à 1 an, puis :
+  – Carré, Hépatite, Parvovirose : tous les 1 à 3 ans
+  – Leptospirose : tous les ans
+  – Rage : tous les 1 à 3 ans selon le vaccin (obligatoire pour voyager)
+  – Toux du chenil : tous les ans si pension, expo ou contacts fréquents
+• Notez chaque injection et son rappel dans l'onglet Vaccins.`),
+      P('🦠', 'Maladies infectieuses principales',
+`• Maladie de Carré : virus grave (fièvre, troubles digestifs, respiratoires puis nerveux). Le vaccin protège très bien.
+• Parvovirose : gastro-entérite hémorragique très contagieuse, dangereuse surtout pour les chiots.
+• Hépatite de Rubarth : atteinte du foie, rare grâce à la vaccination.
+• Leptospirose : bactérie transmise par les urines de rongeurs et les eaux stagnantes. Transmissible à l'homme. Vaccin annuel.
+• Rage : mortelle, transmissible à l'homme. Vaccin obligatoire pour voyager.
+• Toux du chenil : trachéo-bronchite très contagieuse (chenils, pensions, expositions).
+• Piroplasmose : transmise par les tiques — abattement, fièvre, urines foncées → urgence vétérinaire.`),
+      P('🪱', 'Parasites intestinaux',
+`• Vers ronds (ascaris, ankylostomes) : fréquents chez le chiot — amaigrissement, diarrhée, ventre gonflé.
+• Vers plats (ténia, Dipylidium transmis par les puces) : petits segments « grains de riz » dans les selles.
+• Giardia : diarrhées chroniques.
+Prévention :
+• Vermifuge tous les 3 mois chez l'adulte (ex. Drontal), tous les mois jusqu'à 6 mois chez le chiot.
+• Traiter aussi contre les puces (cycle du ténia) et ramasser les selles.`),
+      P('🦟', 'Puces & tiques',
+`• Puces : démangeaisons, allergie (DAPP), transmettent le ténia. Protection toute l'année : collier (type Seresto, ~8 mois), pipettes ou comprimés. En cas d'infestation, traiter aussi la maison (paniers, plinthes).
+• Tiques : transmettent piroplasmose, maladie de Lyme, ehrlichiose. Inspecter le chien après chaque balade en forêt ou hautes herbes ; retirer avec un crochet à tiques (jamais d'éther), puis désinfecter.
+• Dans les jours qui suivent une morsure, surveiller fièvre, abattement, urines foncées → vétérinaire.`),
+      P('✈️', 'Voyager à l\'étranger',
+`Union européenne :
+• Puce électronique (ou tatouage lisible d'avant juillet 2011)
+• Passeport européen délivré par le vétérinaire
+• Vaccin rage en cours de validité, fait au moins 21 jours avant le départ
+• Vermifuge contre l'échinocoque 1 à 5 jours avant l'entrée en Irlande, à Malte, en Finlande, en Norvège (et Royaume-Uni).
+Hors UE : se renseigner tôt — titrage antirabique parfois exigé, avec des délais de 3 à 4 mois. Pour revenir en France depuis certains pays, le titrage doit être fait AVANT le départ.
+Vérifier les règles à jour auprès du vétérinaire (ou anivetvoyage.com).`),
+      P('🚗', 'Voyager avec son chien',
+`Voiture : harnais attaché à la ceinture, caisse ou filet de séparation. Pause toutes les 2 h (eau + besoins). Ne jamais laisser le chien seul dans une voiture au soleil — coup de chaleur mortel même vitres entrouvertes.
+Train (SNCF) : billet « animal », muselière exigible pour les grands chiens, carnet à jour.
+Avion : cabine pour les petits gabarits (selon compagnie), sinon soute pressurisée en caisse aux normes IATA. Éviter les fortes chaleurs, se renseigner tôt.
+À emporter : eau + gamelle, sacs, carnet de santé/passeport, tapis, jouet familier, trousse (tire-tique, désinfectant).`)
+    ];
+  }
+
   function emptyState() {
     return {
       version: 1,
@@ -95,7 +143,12 @@
       stock: {},                 // ingredientId => quantité en stock (g ou pièces)
       people: seedPeople(),      // [{id, name}]
       purchases: [],             // [{id, date, items:[{ingredientId, qty}], cost}]
-      cuts: seedCuts()           // morceaux suggérés (['cuisse', 'bavette', …])
+      cuts: seedCuts(),          // morceaux suggérés (['cuisse', 'bavette', …])
+      identity: { chipNumber: '', chipPhoto: '', identDate: '', identVet: '' }, // puce + véto identificateur
+      vetCurrent: { name: '', phone: '', address: '' },  // vétérinaire actuel
+      documents: [],             // papiers du chien : [{id, name, mime, size, dataURL, addedAt}]
+      vaccinations: [],          // [{id, name, date, booster, vet, notes}]
+      healthPages: seedHealthPages() // fiches de référence du carnet
     };
   }
 
@@ -224,6 +277,11 @@
     if (!Array.isArray(s.people)) s.people = seedPeople();
     if (!Array.isArray(s.purchases)) s.purchases = [];
     if (!Array.isArray(s.cuts)) s.cuts = seedCuts();
+    if (typeof s.identity !== 'object' || !s.identity) s.identity = base.identity;
+    if (typeof s.vetCurrent !== 'object' || !s.vetCurrent) s.vetCurrent = base.vetCurrent;
+    if (!Array.isArray(s.documents)) s.documents = [];
+    if (!Array.isArray(s.vaccinations)) s.vaccinations = [];
+    if (!Array.isArray(s.healthPages)) s.healthPages = [];
     // Onglet « Animaux entiers » : ajoute les articles par défaut aux données existantes
     if (!s.ingredients.some((i) => i.category === 'entier')) s.ingredients = s.ingredients.concat(base.ingredients.filter((i) => i.category === 'entier'));
     // Créneau matin/soir des repas : déduit du nom « … (matin) » / « … (soir…) », puis nettoyé
@@ -251,6 +309,12 @@
     }
     // Repas des rotations 4 semaines (lapin, saumon, côte de broutard…) : seedés une fois
     if (!s.seeded.mealsRotation4) { ensureSheetMeals(s); s.seeded.mealsRotation4 = true; }
+    // Fiches du carnet de référence : seedées une fois (modifiables/supprimables ensuite)
+    if (!s.seeded.healthPages) {
+      const have = new Set(s.healthPages.map((p) => p.title.toLowerCase()));
+      s.healthPages = s.healthPages.concat(seedHealthPages().filter((p) => !have.has(p.title.toLowerCase())));
+      s.seeded.healthPages = true;
+    }
     return s;
   }
 
@@ -590,6 +654,55 @@
         .map((ing) => ({ ing, days: this.coverageDays(ing.id) }))
         .filter((x) => x.days !== Infinity && x.days < seuil);
     },
+    /* ---- Identité (puce, véto) & documents ---- */
+    updateIdentity(patch) { commit((s) => Object.assign(s.identity, patch)); },
+    updateVet(patch) { commit((s) => Object.assign(s.vetCurrent, patch)); },
+    addDocument(doc) { const d = Object.assign({ id: uid(), addedAt: todayISO() }, doc); commit((s) => s.documents.push(d)); return d; },
+    removeDocument(id) { commit((s) => { s.documents = s.documents.filter((x) => x.id !== id); }); },
+
+    /* ---- Vaccinations ---- */
+    addVaccination(data) { const v = Object.assign({ id: uid(), name: '', date: todayISO(), booster: '', vet: '', notes: '' }, data); commit((s) => s.vaccinations.push(v)); return v; },
+    updateVaccination(id, patch) { commit((s) => { const v = s.vaccinations.find((x) => x.id === id); if (v) Object.assign(v, patch); }); },
+    removeVaccination(id) { commit((s) => { s.vaccinations = s.vaccinations.filter((x) => x.id !== id); }); },
+    vaccinationsSorted() { return state.vaccinations.slice().sort((a, b) => (b.date || '').localeCompare(a.date || '')); },
+
+    /* ---- Carnet de référence (fiches) ---- */
+    addHealthPage(data) { const p = Object.assign({ id: uid(), icon: '📄', title: '', content: '', updatedAt: todayISO() }, data); commit((s) => s.healthPages.push(p)); return p; },
+    updateHealthPage(id, patch) { commit((s) => { const p = s.healthPages.find((x) => x.id === id); if (p) { Object.assign(p, patch); p.updatedAt = todayISO(); } }); },
+    removeHealthPage(id) { commit((s) => { s.healthPages = s.healthPages.filter((x) => x.id !== id); }); },
+
+    /* ---- Suggestion de repas selon le stock (petit « agent » local) ----
+       Compose viande + légume (+ os/abats/œuf selon l'équilibre BARF de la semaine)
+       uniquement avec ce qui est réellement en stock. */
+    suggestMealFromStock(slot) {
+      slot = slot || 'matin';
+      const stock = (id) => this.stockOf(id);
+      const inStock = (cat) => state.ingredients.filter((i) => i.category === cat && stock(i.id) > 0);
+      const meats = inStock('viande');
+      if (!meats.length) return { error: 'Aucune viande en stock — enregistre d\'abord un achat.' };
+      // viande avec le plus de réserve (favorise l'écoulement du congélateur)
+      const meat = meats.slice().sort((a, b) => stock(b.id) - stock(a.id))[0];
+      const items = [{ ingredientId: meat.id, qty: Math.min(slot === 'soir' ? 400 : 500, stock(meat.id)) }];
+      const nameParts = [meat.name.replace(/\s*\(.*\)\s*$/, '')];
+      const bal = this.barfBalance('week');
+      if (slot === 'soir') {
+        const abats = inStock('abats')[0];
+        const oeuf = inStock('oeuf')[0];
+        if (abats && bal.abatsPct < 10) { items.push({ ingredientId: abats.id, qty: Math.min(200, stock(abats.id)) }); nameParts.push('abats'); }
+        else if (oeuf) { items.push({ ingredientId: oeuf.id, qty: 1 }); nameParts.push('œuf'); }
+      } else {
+        const os = inStock('os')[0];
+        if (os && bal.osPieces < 3) { items.push({ ingredientId: os.id, qty: 1 }); nameParts.push('os'); }
+      }
+      const legs = inStock('legume');
+      if (legs.length) {
+        const leg = legs[Math.floor(Math.random() * legs.length)];
+        items.push({ ingredientId: leg.id, qty: Math.min(100, stock(leg.id)) });
+        nameParts.push(leg.name.toLowerCase());
+      }
+      return { name: nameParts.join(' + '), slot, items };
+    },
+
     /* ---- Morceaux (suggestions pour les achats) ---- */
     cuts: () => state.cuts.slice(),
     hasCut(name) { return state.cuts.some((c) => c.toLowerCase() === (name || '').trim().toLowerCase()); },
