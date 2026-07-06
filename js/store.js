@@ -71,13 +71,23 @@
     return ['😀 En forme', '😐 Calme', '😟 Fatigué', '😴 Épuisé', '🤩 Excité', '😰 Stressé', '😠 Agressif', '🤢 Malade'];
   }
 
-  // Pharmacie : fiches produits (posologie, principes actifs). Modifiables dans Réglages.
+  // Pharmacie : fiches produits structurées — principes actifs [{name, amount}] avec milligrammage,
+  // posologie décomposée (posoQty quantité, posoForm forme, posoEvery+posoUnit fréquence, posoNote précisions).
   function seedPharmacy() {
-    const M = (name, dose, actives, notes) => ({ id: uid(), name, dose, actives, notes: notes || '' });
+    const M = (name, actives, poso, notes) => Object.assign({ id: uid(), name, actives, notes: notes || '' }, poso);
     return [
-      M('Drontal (vermifuge)', '1 comprimé et demi, tous les 3 mois', 'praziquantel, pyrantel, fébantel', 'Vermifuge large spectre (vers ronds et plats).'),
-      M('Seresto (collier anti-puces/tiques)', '1 collier, efficace environ 8 mois', 'imidaclopride, fluméthrine', 'Retirer pour les baignades prolongées.'),
-      M('Biseptine', 'Application locale 2 à 3 fois par jour, sur peau propre', 'chlorhexidine, chlorure de benzalkonium', 'Antiseptique cutané — éviter les yeux.')
+      M('Drontal (vermifuge)',
+        [{ name: 'praziquantel', amount: '50 mg' }, { name: 'pyrantel (embonate)', amount: '144 mg' }, { name: 'fébantel', amount: '150 mg' }],
+        { posoQty: 1.5, posoForm: 'comprimé', posoEvery: 3, posoUnit: 'mois', posoNote: 'avec ou sans nourriture' },
+        'Vermifuge large spectre (vers ronds et plats). Dosages par comprimé — 1 comprimé pour 10 kg.'),
+      M('Seresto (collier anti-puces/tiques)',
+        [{ name: 'imidaclopride', amount: '4,50 g' }, { name: 'fluméthrine', amount: '2,03 g' }],
+        { posoQty: 1, posoForm: 'collier', posoEvery: 8, posoUnit: 'mois', posoNote: 'modèle grand chien (> 8 kg)' },
+        'Retirer pour les baignades prolongées.'),
+      M('Biseptine',
+        [{ name: 'chlorhexidine (digluconate)', amount: '0,25 g/100 ml' }, { name: 'chlorure de benzalkonium', amount: '0,025 g/100 ml' }],
+        { posoQty: 1, posoForm: 'application', posoEvery: 3, posoUnit: 'fois par jour', posoNote: 'sur peau propre' },
+        'Antiseptique cutané — éviter les yeux.')
     ];
   }
 
@@ -353,6 +363,27 @@ Avion : cabine pour les petits gabarits (selon compagnie), sinon soute pressuris
         if (med) t.medId = med.id;
       });
       s.seeded.pharmacy = true;
+    }
+    // Pharmacie v2 : passage au format structuré (actifs avec dosage, posologie décomposée)
+    if (!s.seeded.pharmacyV2) {
+      const V20 = { // valeurs seedées en v20 : si intactes, on remplace par la fiche structurée complète
+        'drontal (vermifuge)': ['1 comprimé et demi, tous les 3 mois', 'praziquantel, pyrantel, fébantel'],
+        'seresto (collier anti-puces/tiques)': ['1 collier, efficace environ 8 mois', 'imidaclopride, fluméthrine'],
+        'biseptine': ['Application locale 2 à 3 fois par jour, sur peau propre', 'chlorhexidine, chlorure de benzalkonium']
+      };
+      const structured = seedPharmacy();
+      s.pharmacy = s.pharmacy.map((p) => {
+        if (Array.isArray(p.actives)) return p; // déjà au nouveau format
+        const key = (p.name || '').toLowerCase();
+        const neuf = structured.find((x) => x.name.toLowerCase() === key);
+        if (neuf && V20[key] && p.dose === V20[key][0] && p.actives === V20[key][1]) return Object.assign({}, neuf, { id: p.id });
+        // conversion générique : rien n'est perdu (ancienne posologie → précisions, actifs → lignes sans dosage)
+        return Object.assign({}, p, {
+          actives: p.actives ? String(p.actives).split(',').map((a) => ({ name: a.trim(), amount: '' })) : [],
+          posoQty: '', posoForm: 'autre', posoEvery: '', posoUnit: 'jours', posoNote: p.dose || ''
+        });
+      });
+      s.seeded.pharmacyV2 = true;
     }
     // Fiches du carnet de référence : seedées une fois (modifiables/supprimables ensuite)
     if (!s.seeded.healthPages) {
@@ -751,7 +782,27 @@ Avion : cabine pour les petits gabarits (selon compagnie), sinon soute pressuris
     /* ---- Pharmacie (fiches médicaments/produits) ---- */
     pharmacy: () => state.pharmacy.slice(),
     pharmaMed: (id) => state.pharmacy.find((p) => p.id === id),
-    addPharmaMed(data) { const p = Object.assign({ id: uid(), name: '', dose: '', actives: '', notes: '' }, data); commit((s) => s.pharmacy.push(p)); return p; },
+    // Posologie lisible : « 1,5 comprimés · tous les 3 mois · avec le repas »
+    pharmaPosology(p) {
+      if (!p) return '';
+      const parts = [];
+      if (p.posoQty) {
+        const qs = (+p.posoQty).toLocaleString('fr-FR');
+        const f = p.posoForm || '';
+        parts.push(f === 'g' || f === 'ml' ? qs + ' ' + f : (!f || f === 'autre') ? qs : qs + ' ' + f + (+p.posoQty > 1 ? 's' : ''));
+      }
+      if (p.posoEvery) parts.push(p.posoUnit === 'fois par jour' ? p.posoEvery + ' fois par jour' : 'tous les ' + p.posoEvery + ' ' + p.posoUnit);
+      if (p.posoNote) parts.push(p.posoNote);
+      if (!parts.length && p.dose) return p.dose; // ancien format
+      return parts.join(' · ');
+    },
+    // Principes actifs lisibles : « praziquantel 50 mg, pyrantel 144 mg »
+    pharmaActives(p) {
+      if (!p) return '';
+      if (Array.isArray(p.actives)) return p.actives.map((a) => a.name + (a.amount ? ' ' + a.amount : '')).join(', ');
+      return p.actives || '';
+    },
+    addPharmaMed(data) { const p = Object.assign({ id: uid(), name: '', actives: [], posoQty: '', posoForm: 'comprimé', posoEvery: '', posoUnit: 'mois', posoNote: '', notes: '' }, data); commit((s) => s.pharmacy.push(p)); return p; },
     updatePharmaMed(id, patch) { commit((s) => { const p = s.pharmacy.find((x) => x.id === id); if (p) Object.assign(p, patch); }); },
     removePharmaMed(id) {
       commit((s) => {

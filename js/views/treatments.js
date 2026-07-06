@@ -99,9 +99,10 @@
         h('option', { value: '', selected: !d.medId }, '— Aucun —')
       ].concat(pharmacy.map((p) => h('option', { value: p.id, selected: p.id === d.medId }, p.name)))));
       const med = d.medId ? Store.pharmaMed(d.medId) : null;
-      if (med && (med.dose || med.actives || med.notes)) {
+      const medPoso = Store.pharmaPosology(med), medActs = Store.pharmaActives(med);
+      if (med && (medPoso || medActs || med.notes)) {
         wrap.appendChild(h('div.muted.small', { style: 'white-space:pre-wrap;background:var(--sand);padding:8px 10px;border-radius:10px;margin-top:6px' },
-          [med.dose ? 'Posologie : ' + med.dose : null, med.actives ? 'Principes actifs : ' + med.actives : null, med.notes || null].filter(Boolean).join('\n')));
+          [medPoso ? 'Posologie : ' + medPoso : null, medActs ? 'Principes actifs : ' + medActs : null, med.notes || null].filter(Boolean).join('\n')));
       }
       wrap.appendChild(h('div.muted.small', { style: 'margin-top:4px' }, 'Fiches modifiables dans Réglages → Pharmacie.'));
     }

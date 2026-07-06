@@ -177,7 +177,7 @@
           ? h('select.input', { style: 'flex:1.2', onChange: (e) => {
               const v = e.target.value;
               if (v === '__libre__') { m.medId = null; m.name = ''; m._free = true; }
-              else if (v) { const p = Store.pharmaMed(v); m.medId = v; m.name = p.name; if (!m.dose && p.dose) m.dose = p.dose; }
+              else if (v) { const p = Store.pharmaMed(v); m.medId = v; m.name = p.name; if (!m.dose) m.dose = Store.pharmaPosology(p); }
               render();
             } }, [
               h('option', { value: '', selected: !m.medId, disabled: true }, 'Choisir un produit…'),
@@ -185,9 +185,10 @@
               h('option', { value: '__libre__' }, 'Autre (saisie libre)…')
             ])
           : h('input.input', { style: 'flex:1.2', placeholder: 'Ex. Biseptine', value: m.name || '', onInput: (e) => m.name = e.target.value });
-        const info = med && (med.dose || med.actives || med.notes)
+        const medPoso = Store.pharmaPosology(med), medActs = Store.pharmaActives(med);
+        const info = med && (medPoso || medActs || med.notes)
           ? h('div.muted.small', { style: 'display:none;white-space:pre-wrap;background:var(--sand);padding:8px 10px;border-radius:10px;margin:4px 0 0' },
-              [med.dose ? 'Posologie : ' + med.dose : null, med.actives ? 'Principes actifs : ' + med.actives : null, med.notes || null].filter(Boolean).join('\n'))
+              [medPoso ? 'Posologie : ' + medPoso : null, medActs ? 'Principes actifs : ' + medActs : null, med.notes || null].filter(Boolean).join('\n'))
           : null;
         wrap.appendChild(h('div', { style: 'margin-bottom:8px' }, [
           h('div.inline', { style: 'align-items:flex-start' }, [

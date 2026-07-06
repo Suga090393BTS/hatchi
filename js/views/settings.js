@@ -109,7 +109,7 @@ create policy "hatchi_all" on public.hatchi_state
     meds.forEach((p) => {
       card.appendChild(h('div.row', { onClick: () => { UI.closeModal(); setTimeout(() => openPharmaEditor(p), 50); } }, [
         h('div.row-ic', null, '💊'),
-        h('div.row-main', null, [h('strong', null, p.name), h('small', null, p.dose || 'Posologie non renseignée')]),
+        h('div.row-main', null, [h('strong', null, p.name), h('small', null, Store.pharmaPosology(p) || 'Posologie non renseignée')]),
         h('div.row-end', null, h('span.muted', null, '›'))
       ]));
     });
@@ -120,20 +120,61 @@ create policy "hatchi_all" on public.hatchi_state
     ]);
     UI.modal({ title: '💊 Pharmacie', body });
   }
+  const PHARMA_FORMS = [['comprimé', 'Comprimé(s)'], ['g', 'Grammes (g)'], ['ml', 'Millilitres (ml)'], ['pipette', 'Pipette(s)'], ['application', 'Application(s)'], ['collier', 'Collier'], ['autre', 'Autre']];
+  const PHARMA_UNITS = [['fois par jour', '… fois par jour'], ['jours', 'tous les … jours'], ['semaines', 'toutes les … semaines'], ['mois', 'tous les … mois'], ['ans', 'tous les … ans']];
+
   function openPharmaEditor(p) {
     const isNew = !p;
-    let d = p ? JSON.parse(JSON.stringify(p)) : { name: '', dose: '', actives: '', notes: '' };
+    let d = p ? JSON.parse(JSON.stringify(p)) : { name: '', actives: [], posoQty: '', posoForm: 'comprimé', posoEvery: '', posoUnit: 'mois', posoNote: '', notes: '' };
+    if (!Array.isArray(d.actives)) d.actives = d.actives ? String(d.actives).split(',').map((a) => ({ name: a.trim(), amount: '' })) : [];
+
+    // Principes actifs : lignes nom + dosage (mg…)
+    const activesBox = h('div');
+    function renderActives() {
+      UI.clear(activesBox);
+      if (!d.actives.length) activesBox.appendChild(h('div.muted.small', { style: 'padding:4px 2px' }, 'Aucun principe actif renseigné.'));
+      d.actives.forEach((a, idx) => {
+        activesBox.appendChild(h('div.inline', { style: 'margin-bottom:8px' }, [
+          h('input.input', { style: 'flex:1.3', placeholder: 'Ex. praziquantel', value: a.name || '', onInput: (e) => a.name = e.target.value }),
+          h('input.input', { style: 'flex:0.9', placeholder: 'Ex. 50 mg', value: a.amount || '', onInput: (e) => { a.amount = e.target.value; preview(); } }),
+          h('button.delete-x', { onClick: () => { d.actives.splice(idx, 1); renderActives(); } }, '✕')
+        ]));
+      });
+      activesBox.appendChild(h('button.btn.ghost.sm', { onClick: () => { d.actives.push({ name: '', amount: '' }); renderActives(); } }, '+ Principe actif'));
+    }
+    renderActives();
+
+    const previewEl = h('div.muted.small', { style: 'background:var(--sand);padding:8px 10px;border-radius:10px;margin-top:6px' });
+    const preview = () => { const t = Store.pharmaPosology(d); previewEl.textContent = t ? '💊 ' + t : 'Posologie : complète les champs ci-dessus.'; };
+    preview();
+
     const body = h('div', null, [
       h('div.field', null, [h('label', null, 'Nom du produit'), h('input.input', { value: d.name, placeholder: 'Ex. Drontal, Biseptine…', onInput: (e) => d.name = e.target.value })]),
-      h('div.field', null, [h('label', null, 'Posologie'), h('input.input', { value: d.dose || '', placeholder: 'Ex. 1 comprimé et demi, tous les 3 mois', onInput: (e) => d.dose = e.target.value })]),
-      h('div.field', null, [h('label', null, 'Principes actifs / composition'), h('input.input', { value: d.actives || '', placeholder: 'Ex. praziquantel, pyrantel…', onInput: (e) => d.actives = e.target.value })]),
-      h('div.field', null, [h('label', null, 'Remarques'), h('textarea.input', { value: d.notes || '', placeholder: 'Précautions, où l\'acheter, ordonnance…', onInput: (e) => d.notes = e.target.value })]),
+      h('div.field', null, [h('label', null, 'Principes actifs & dosages'), activesBox]),
+      h('div.field', null, [h('label', null, 'Posologie')]),
+      h('div.grid2', null, [
+        h('div.field', null, [h('label', null, 'Quantité'), h('input.input', { type: 'number', step: '0.25', min: '0', value: d.posoQty, placeholder: 'Ex. 1,5', onInput: (e) => { d.posoQty = e.target.value; preview(); } })]),
+        h('div.field', null, [h('label', null, 'Forme'),
+          h('select.input', { onChange: (e) => { d.posoForm = e.target.value; preview(); } }, PHARMA_FORMS.map(([v, l]) => h('option', { value: v, selected: v === d.posoForm }, l)))])
+      ]),
+      h('div.grid2', null, [
+        h('div.field', null, [h('label', null, 'Fréquence'), h('input.input', { type: 'number', min: '0', value: d.posoEvery, placeholder: 'Ex. 3', onInput: (e) => { d.posoEvery = e.target.value; preview(); } })]),
+        h('div.field', null, [h('label', null, 'Rythme'),
+          h('select.input', { onChange: (e) => { d.posoUnit = e.target.value; preview(); } }, PHARMA_UNITS.map(([v, l]) => h('option', { value: v, selected: v === d.posoUnit }, l)))])
+      ]),
+      h('div.field', null, [h('label', null, 'Précisions'), h('input.input', { value: d.posoNote || '', placeholder: 'Ex. sur peau propre, avec le repas…', onInput: (e) => { d.posoNote = e.target.value; preview(); } })]),
+      previewEl,
+      h('div.field', { style: 'margin-top:12px' }, [h('label', null, 'Remarques'), h('textarea.input', { value: d.notes || '', placeholder: 'Précautions, où l\'acheter, ordonnance…', onInput: (e) => d.notes = e.target.value })]),
       h('div.modal-actions', null, [
         !isNew ? h('button.btn.danger', { onClick: async () => {
           if (await UI.confirm('Supprimer « ' + p.name + ' » de la pharmacie ?', { danger: true, ok: 'Supprimer' })) { Store.removePharmaMed(p.id); UI.closeModal(); setTimeout(openPharmacyList, 50); }
         } }, '🗑') : h('button.btn.subtle', { onClick: () => { UI.closeModal(); setTimeout(openPharmacyList, 50); } }, 'Annuler'),
         h('button.btn', { style: 'flex:2', onClick: () => {
           if (!d.name.trim()) { UI.toast('Nom requis'); return; }
+          d.actives = d.actives.filter((a) => (a.name || '').trim() || (a.amount || '').trim());
+          d.posoQty = d.posoQty === '' ? '' : +d.posoQty;
+          d.posoEvery = d.posoEvery === '' ? '' : +d.posoEvery;
+          delete d.dose; // ancien format remplacé par la posologie structurée
           if (isNew) Store.addPharmaMed(d); else Store.updatePharmaMed(p.id, d);
           UI.closeModal(); setTimeout(openPharmacyList, 50);
         } }, 'Enregistrer')
