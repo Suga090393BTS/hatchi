@@ -66,6 +66,24 @@
   });
   pill.addEventListener('click', () => go('settings'));
 
+  /* ---- Bouton 📞 : appel direct du véto (choix véto/urgences si les deux sont renseignés) ---- */
+  document.getElementById('vetCallBtn').addEventListener('click', () => {
+    const s = Store.get();
+    const vet = s.vetCurrent || {};
+    const urg = s.vetEmergency || {};
+    const call = (p) => { location.href = 'tel:' + String(p).replace(/[^+0-9]/g, ''); };
+    if (vet.phone && urg.phone) {
+      const body = h('div', null, [
+        h('button.btn.block', { style: 'margin-bottom:8px', onClick: () => { UI.closeModal(); call(vet.phone); } }, '📞 ' + (vet.name || 'Vétérinaire') + ' — ' + vet.phone),
+        h('button.btn.danger.block', { onClick: () => { UI.closeModal(); call(urg.phone); } }, '🚨 Urgences — ' + (urg.name ? urg.name + ' · ' : '') + urg.phone),
+        h('button.btn.subtle.block', { style: 'margin-top:8px', onClick: () => UI.closeModal() }, 'Annuler')
+      ]);
+      UI.modal({ title: 'Appeler', body });
+    } else if (vet.phone) call(vet.phone);
+    else if (urg.phone) call(urg.phone);
+    else { UI.toast('Renseigne le téléphone du véto dans Soins → Identité'); go('treatments'); }
+  });
+
   /* ---- Re-render on state change (only current view) ---- */
   let raf = null;
   let pendingRender = false;

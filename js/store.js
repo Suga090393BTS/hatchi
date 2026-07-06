@@ -175,6 +175,7 @@ Avion : cabine pour les petits gabarits (selon compagnie), sinon soute pressuris
       pharmacy: seedPharmacy(),  // fiches médicaments/produits : [{id, name, dose, actives, notes}]
       identity: { chipNumber: '', chipPhoto: '', identDate: '', identVet: '', prevOwner: '', prevVet: '' }, // puce, véto identificateur, ancien détenteur/véto
       vetCurrent: { name: '', phone: '', address: '' },  // vétérinaire actuel
+      vetEmergency: { name: '', phone: '', address: '' }, // urgences vétérinaires (garde 24h/24)
       documents: [],             // papiers du chien : [{id, name, mime, size, dataURL, addedAt}]
       vaccinations: [],          // [{id, name, date, booster, vet, notes}]
       healthPages: seedHealthPages() // fiches de référence du carnet
@@ -307,6 +308,7 @@ Avion : cabine pour les petits gabarits (selon compagnie), sinon soute pressuris
     if (!Array.isArray(s.pharmacy)) s.pharmacy = [];
     s.identity = Object.assign({}, base.identity, s.identity || {});
     s.vetCurrent = Object.assign({}, base.vetCurrent, s.vetCurrent || {});
+    s.vetEmergency = Object.assign({}, base.vetEmergency, s.vetEmergency || {});
     if (!Array.isArray(s.documents)) s.documents = [];
     if (!Array.isArray(s.vaccinations)) s.vaccinations = [];
     if (!Array.isArray(s.healthPages)) s.healthPages = [];
@@ -413,6 +415,24 @@ Avion : cabine pour les petits gabarits (selon compagnie), sinon soute pressuris
       const have = new Set(s.healthPages.map((p) => p.title.toLowerCase()));
       s.healthPages = s.healthPages.concat(seedHealthPages().filter((p) => !have.has(p.title.toLowerCase())));
       s.seeded.healthPages = true;
+    }
+    // Fiche « Contacts vétérinaires » du carnet : ancien véto, urgences près de chez moi, ancien détenteur
+    if (!s.seeded.contactsPage) {
+      s.healthPages.unshift({
+        id: uid(), icon: '📞', title: 'Contacts vétérinaires', updatedAt: todayISO(),
+        content:
+`Vétérinaire actuel : renseigné dans Soins → Identité (bouton 📞 en haut de l'app pour appeler).
+
+Urgences vétérinaires près de chez moi (24h/24) :
+• Clinique de garde : ………………… — tél : …………………
+• Centre hospitalier vétérinaire : ………………… — tél : …………………
+
+Ancien vétérinaire (quand elle était bébé) : …………………
+Ancien détenteur (qui me l'a cédée) : …………………
+
+En cas d'urgence : appeler AVANT de partir (l'équipe prépare l'arrivée), transporter au calme, ne rien donner à manger ni à boire sans avis vétérinaire.`
+      });
+      s.seeded.contactsPage = true;
     }
     return s;
   }
@@ -784,6 +804,7 @@ Avion : cabine pour les petits gabarits (selon compagnie), sinon soute pressuris
     /* ---- Identité (puce, véto) & documents ---- */
     updateIdentity(patch) { commit((s) => Object.assign(s.identity, patch)); },
     updateVet(patch) { commit((s) => Object.assign(s.vetCurrent, patch)); },
+    updateVetEmergency(patch) { commit((s) => Object.assign(s.vetEmergency, patch)); },
     addDocument(doc) { const d = Object.assign({ id: uid(), addedAt: todayISO() }, doc); commit((s) => s.documents.push(d)); return d; },
     removeDocument(id) { commit((s) => { s.documents = s.documents.filter((x) => x.id !== id); }); },
 

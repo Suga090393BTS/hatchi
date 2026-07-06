@@ -190,6 +190,17 @@
       h('div.field', null, [h('label', null, 'Adresse'), h('input.input', { value: vet.address || '', placeholder: 'Adresse de la clinique', onChange: (e) => Store.updateVet({ address: e.target.value }) })])
     ]));
 
+    const urg = Store.get().vetEmergency;
+    root.appendChild(h('div.section-title', null, 'Urgences vétérinaires (garde 24h/24)'));
+    root.appendChild(h('div.card', null, [
+      h('div.grid2', null, [
+        h('div.field', null, [h('label', null, 'Clinique de garde'), h('input.input', { value: urg.name || '', placeholder: 'Ex. CHV, véto de garde…', onChange: (e) => Store.updateVetEmergency({ name: e.target.value }) })]),
+        h('div.field', null, [h('label', null, 'Téléphone'), h('input.input', { type: 'tel', value: urg.phone || '', placeholder: '04…', onChange: (e) => Store.updateVetEmergency({ phone: e.target.value }) })])
+      ]),
+      h('div.field', null, [h('label', null, 'Adresse'), h('input.input', { value: urg.address || '', placeholder: 'Adresse des urgences', onChange: (e) => Store.updateVetEmergency({ address: e.target.value }) })]),
+      h('p.muted.small', { style: 'margin:0 4px' }, 'Une fois renseigné, le bouton 📞 en haut de l\'app propose « Véto » ou « 🚨 Urgences ».')
+    ]));
+
     root.appendChild(h('div.section-title', null, 'Papiers du chien (PDF ou photos)'));
     const docs = Store.get().documents;
     if (!docs.length) {
