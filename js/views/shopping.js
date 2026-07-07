@@ -61,20 +61,41 @@
       return;
     }
 
-    // Manquant = besoin − ce que j'ai déjà au congélateur
-    const toBuy = {}; let covered = 0;
+    // Manquant = besoin − ce que j'ai déjà en stock. Produits maison → à préparer, le reste → à acheter
+    const toBuy = {}; const toPrepare = {}; let covered = 0;
     needIds.forEach((id) => {
       const m = needs[id] - Store.stockOf(id);
-      if (m > 0) toBuy[id] = m; else covered++;
+      if (m <= 0) { covered++; return; }
+      const ing = Store.ingredient(id);
+      if (ing && ing.free) toPrepare[id] = m; else toBuy[id] = m;
     });
     const buyIds = Object.keys(toBuy);
+    const prepIds = Object.keys(toPrepare);
 
-    if (!buyIds.length) {
+    if (!buyIds.length && !prepIds.length) {
       root.appendChild(h('div.card', { style: 'background:var(--green-100);border-color:#bfe0d4' }, [
         h('div.inline', { style: 'gap:10px' }, [h('span', { style: 'font-size:24px' }, '✅'),
           h('div', null, [h('strong', null, 'Rien à acheter 🎉'), h('div.small.muted', null, 'Ton stock couvre déjà toute la période.')])])
       ]));
       return;
+    }
+
+    // 🏡 Production maison : à préparer/récolter, pas à acheter
+    if (prepIds.length) {
+      root.appendChild(h('div.section-title', null, '🏡 À préparer (production maison)'));
+      root.appendChild(h('div.card.flush', null, prepIds.map((id) => {
+        const ing = Store.ingredient(id); const qty = toPrepare[id];
+        const have = Store.stockOf(id);
+        return h('div.row', null, [
+          h('div.row-ic', null, catIcon(ing.category)),
+          h('div.row-main', null, [h('strong', null, ing.name),
+            h('small', null, have ? 'déjà ' + qtyLabel(ing, have) + ' en stock' : '🏡 produit maison · 0 €')]),
+          h('div.row-end', null, [
+            h('strong', null, qtyLabel(ing, qty)),
+            h('button.btn.sm', { onClick: () => openPrepareModal(ing, qty) }, '✓ Préparé')
+          ])
+        ]);
+      })));
     }
 
     let grandTotal = 0;
@@ -105,16 +126,38 @@
     if (covered) root.appendChild(h('p.muted.small.center', { style: 'margin:6px' },
       '✓ ' + covered + ' ingrédient' + (covered > 1 ? 's' : '') + ' déjà couvert' + (covered > 1 ? 's' : '') + ' par le stock'));
 
-    root.appendChild(h('div.card', { style: 'margin-top:8px' }, [
-      h('div.inline', { style: 'justify-content:space-between' }, [
-        h('div', null, [h('div.muted.small', null, 'Budget estimé'), h('div', { style: 'font-size:24px;font-weight:800;color:var(--green-700)' }, money(grandTotal))]),
-        h('button.btn.ghost.sm', { onClick: () => App.go('settings') }, 'Prix')
+    if (buyIds.length) {
+      root.appendChild(h('div.card', { style: 'margin-top:8px' }, [
+        h('div.inline', { style: 'justify-content:space-between' }, [
+          h('div', null, [h('div.muted.small', null, 'Budget estimé'), h('div', { style: 'font-size:24px;font-weight:800;color:var(--green-700)' }, money(grandTotal))]),
+          h('button.btn.ghost.sm', { onClick: () => App.go('settings') }, 'Prix')
+        ])
+      ]));
+      root.appendChild(h('div.inline', { style: 'gap:8px' }, [
+        h('button.btn.subtle', { style: 'flex:1', onClick: () => copyList(toBuy) }, '📋 Copier'),
+        h('button.btn', { style: 'flex:1', onClick: () => openPurchaseModal(toBuy) }, '✓ J’ai tout acheté')
+      ]));
+    }
+  }
+
+  // « ✓ Préparé » : la production maison rejoint le stock (frigo si frais, congélo sinon), coût 0 €
+  function openPrepareModal(ing, neededQty) {
+    const piece = ing.unit === 'piece';
+    let q = piece ? Math.ceil(neededQty) : neededQty;
+    const body = h('div', null, [
+      h('p.muted.small', { style: 'margin:0 4px 10px' }, '🏡 ' + ing.name + ' — production maison, coût 0 €. La quantité rejoint ' + (['oeuf', 'legume'].includes(ing.category) ? 'le frigo.' : 'le congélo.')),
+      h('div.field', null, [h('label', null, 'Quantité préparée' + (piece ? ' (pièces)' : ' (g)')),
+        h('input.input', { type: 'number', min: '0', step: piece ? '1' : '50', value: q, onInput: (e) => q = +e.target.value || 0 })]),
+      h('div.modal-actions', null, [
+        h('button.btn.subtle', { onClick: () => UI.closeModal() }, 'Annuler'),
+        h('button.btn', { style: 'flex:2', onClick: () => {
+          if (!(q > 0)) { UI.toast('Indique une quantité'); return; }
+          Store.addPurchase({ items: [{ ingredientId: ing.id, qty: piece ? Math.round(q) : Math.round(q) }] });
+          UI.closeModal(); UI.toast('🏡 ' + qtyLabel(ing, q) + ' de ' + ing.name + ' ajouté au stock ✓');
+        } }, '✓ Ajouter au stock')
       ])
-    ]));
-    root.appendChild(h('div.inline', { style: 'gap:8px' }, [
-      h('button.btn.subtle', { style: 'flex:1', onClick: () => copyList(toBuy) }, '📋 Copier'),
-      h('button.btn', { style: 'flex:1', onClick: () => openPurchaseModal(toBuy) }, '✓ J’ai tout acheté')
-    ]));
+    ]);
+    UI.modal({ title: '🏡 Préparé — ' + ing.name, body });
   }
 
   /* ---------- MON CONGÉLATEUR ---------- */
