@@ -337,6 +337,12 @@ create policy "hatchi_all" on public.hatchi_state
           h('div.field', null, [h('label', null, 'Gabarit'),
             h('select.input', { onChange: (e) => Store.updateSettings({ dogSize: e.target.value }) }, DOG_SIZES.map(([v, l]) => h('option', { value: v, selected: v === (s.dogSize || 'moyen') }, l)))])
         ]),
+        h('div.grid2', null, [
+          h('div.field', null, [h('label', null, 'Sexe'),
+            h('select.input', { onChange: (e) => Store.updateSettings({ dogSex: e.target.value }) }, DOG_SEXES.map(([v, l]) => h('option', { value: v, selected: v === (s.dogSex || '') }, l)))]),
+          h('div.field', null, [h('label', null, 'Emoji du bouton'),
+            h('input.input', { value: s.dogEmoji || '🐕', placeholder: '🐕', onChange: (e) => Store.updateSettings({ dogEmoji: (e.target.value || '🐕').trim() }) })])
+        ]),
         h('p.muted.small', { style: 'margin:0 4px' }, 'Toute l\'app (repas, soins, journal, identité…) affiche le chien sélectionné — change de chien en touchant son nom en haut de l\'écran.')
       ]));
 
@@ -463,14 +469,15 @@ create policy "hatchi_all" on public.hatchi_state
 
   /* ---------- Mes chiens ---------- */
   const DOG_SIZES = [['petit', 'Petit (< 10 kg)'], ['moyen', 'Moyen (10-25 kg)'], ['grand', 'Grand (25-45 kg)'], ['geant', 'Géant (> 45 kg)']];
+  const DOG_SEXES = [['', '—'], ['femelle', '♀ Femelle'], ['male', '♂ Mâle']];
   function dogsCard() {
     const dogs = Store.dogsList();
     const card = h('div.card.flush');
     dogs.forEach((d) => {
       card.appendChild(h('div.row', null, [
-        h('div.row-ic', null, '🐕'),
+        h('div.row-ic', null, d.emoji || '🐕'),
         h('div.row-main', { onClick: () => { if (!d.active) { Store.setCurrentDog(d.id); UI.toast('🐾 ' + d.name); } } }, [
-          h('strong', null, d.name),
+          h('strong', null, d.name + (d.sex === 'femelle' ? ' ♀' : d.sex === 'male' ? ' ♂' : '')),
           h('small', null, [d.active ? 'Affiché actuellement' : 'Toucher pour afficher', d.breed ? ' · ' + d.breed : '', d.birthdate ? ' · né(e) le ' + UI.fmtShortYear(d.birthdate) : ''].join(''))
         ]),
         h('div.row-end', null, h('div.inline', { style: 'gap:4px' }, [
@@ -483,7 +490,7 @@ create policy "hatchi_all" on public.hatchi_state
   }
   function openDogEditor(d) {
     const isNew = !d;
-    let name = d ? d.name : '', birth = d ? d.birthdate : '', breed = d ? d.breed : '', size = d ? d.size : 'moyen';
+    let name = d ? d.name : '', birth = d ? d.birthdate : '', breed = d ? d.breed : '', size = d ? d.size : 'moyen', sex = d ? d.sex : '', emoji = d ? d.emoji : '🐕';
     const body = h('div', null, [
       h('div.field', null, [h('label', null, 'Nom du chien'), h('input.input', { value: name, placeholder: 'Ex. Nala', onInput: (e) => name = e.target.value })]),
       h('div.field', null, [h('label', null, 'Date de naissance'), h('input.input', { type: 'date', value: birth, onChange: (e) => birth = e.target.value })]),
@@ -491,6 +498,11 @@ create policy "hatchi_all" on public.hatchi_state
         h('div.field', null, [h('label', null, 'Race'), h('input.input', { value: breed, placeholder: 'Ex. Cavalier King Charles', onInput: (e) => breed = e.target.value })]),
         h('div.field', null, [h('label', null, 'Gabarit'),
           h('select.input', { onChange: (e) => size = e.target.value }, DOG_SIZES.map(([v, l]) => h('option', { value: v, selected: v === size }, l)))])
+      ]),
+      h('div.grid2', null, [
+        h('div.field', null, [h('label', null, 'Sexe'),
+          h('select.input', { onChange: (e) => sex = e.target.value }, DOG_SEXES.map(([v, l]) => h('option', { value: v, selected: v === sex }, l)))]),
+        h('div.field', null, [h('label', null, 'Emoji du bouton'), h('input.input', { value: emoji, placeholder: '🐕', onInput: (e) => emoji = e.target.value })])
       ]),
       isNew ? h('p.muted.small', { style: 'margin:0 4px 10px' }, 'Le nouveau chien démarre avec ses propres soins, journal, poids, repas et identité — le stock, les courses et la pharmacie restent communs à la maison.') : null,
       h('div.modal-actions', null, [
@@ -503,9 +515,9 @@ create policy "hatchi_all" on public.hatchi_state
           if (!name.trim()) { UI.toast('Donne un nom'); return; }
           if (isNew) {
             const id = Store.addDog(name, birth);
-            Store.updateDogMeta(id, { breed: breed.trim(), size });
+            Store.updateDogMeta(id, { breed: breed.trim(), size, sex, emoji: (emoji || '🐕').trim() });
             UI.toast('🐾 Bienvenue ' + name.trim() + ' !');
-          } else Store.updateDogMeta(d.id, { name: name.trim(), birthdate: birth, breed: breed.trim(), size });
+          } else Store.updateDogMeta(d.id, { name: name.trim(), birthdate: birth, breed: breed.trim(), size, sex, emoji: (emoji || '🐕').trim() });
           UI.closeModal();
         } }, 'Enregistrer')
       ])

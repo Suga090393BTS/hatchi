@@ -48,29 +48,24 @@
 
   /* ---- Header bindings ---- */
   function refreshHeader() {
-    const s = Store.get();
-    document.getElementById('dogNameLabel').textContent = (s.settings.dogName || 'Hatchi') + (s.dogs.length > 1 ? ' ▾' : '');
+    // le bandeau vert garde le nom de l'appli ; les chiens ont leur barre dédiée dessous
+    document.getElementById('dogNameLabel').textContent = 'Hatchi';
     document.getElementById('dateLabel').textContent = UI.fmtLong(Store.todayISO());
+    renderDogBar();
   }
 
-  /* ---- Sélecteur de chien : toucher le nom dans le bandeau ---- */
-  function openDogSwitcher() {
-    const dogs = Store.dogsList();
-    const body = h('div', null, [
-      h('div.card.flush', null, dogs.map((d) => h('div.row', {
-        onClick: () => { UI.closeModal(); if (!d.active) { Store.setCurrentDog(d.id); UI.toast('🐾 ' + d.name); } }
-      }, [
-        h('div.row-ic', null, '🐕'),
-        h('div.row-main', null, [h('strong', null, d.name), h('small', null, [d.breed, d.birthdate ? 'né(e) le ' + UI.fmtShortYear(d.birthdate) : ''].filter(Boolean).join(' · '))]),
-        h('div.row-end', null, d.active ? h('span.badge.ok', null, '✓ affiché') : h('span.muted', null, '›'))
-      ]))),
-      h('button.btn.block', { style: 'margin-top:10px', onClick: () => { UI.closeModal(); setTimeout(() => Views.openDogEditor(null), 50); } }, '+ Ajouter un chien')
-    ]);
-    UI.modal({ title: '🐾 Mes chiens', body });
+  /* ---- Barre des chiens : un bouton par chien (emoji personnalisable) ---- */
+  function renderDogBar() {
+    const bar = document.getElementById('dogbar');
+    clear(bar);
+    Store.dogsList().forEach((d) => {
+      bar.appendChild(h('button', {
+        class: 'chip' + (d.active ? ' on' : ''),
+        onClick: () => { if (!d.active) { Store.setCurrentDog(d.id); UI.toast(d.emoji + ' ' + d.name); } }
+      }, [h('span', null, d.emoji), h('span', null, d.name + (d.sex === 'femelle' ? ' ♀' : d.sex === 'male' ? ' ♂' : ''))]));
+    });
+    bar.appendChild(h('button.chip', { title: 'Ajouter un chien', onClick: () => Views.openDogEditor(null) }, '＋'));
   }
-  const brand = document.querySelector('.brand');
-  brand.style.cursor = 'pointer';
-  brand.addEventListener('click', openDogSwitcher);
 
   /* ---- Sync pill ---- */
   const pill = document.getElementById('syncPill');

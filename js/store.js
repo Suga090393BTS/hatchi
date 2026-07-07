@@ -149,10 +149,10 @@ Avion : cabine pour les petits gabarits (selon compagnie), sinon soute pressuris
      s.dogs[] garde une entrée par chien, resynchronisée à chaque commit.
      Changer de chien = sauvegarder la racine dans son entrée, charger l'autre. */
   const DOG_FIELDS = ['treatments', 'journal', 'weights', 'fed', 'rotation', 'doses', 'identity', 'documents', 'vaccinations'];
-  const DOG_SETTINGS = ['dogName', 'dogBirthdate', 'dogBreed', 'dogSize', 'rationPct', 'cycleWeeks', 'anchorMonday'];
+  const DOG_SETTINGS = ['dogName', 'dogBirthdate', 'dogBreed', 'dogSize', 'dogSex', 'dogEmoji', 'rationPct', 'cycleWeeks', 'anchorMonday'];
 
   function emptyDog(name) {
-    const d = { id: uid(), dogName: (name || '').trim() || 'Nouveau chien', dogBirthdate: '', dogBreed: '', dogSize: 'moyen', rationPct: 2.5, cycleWeeks: 1, anchorMonday: mondayOf(todayISO()),
+    const d = { id: uid(), dogName: (name || '').trim() || 'Nouveau chien', dogBirthdate: '', dogBreed: '', dogSize: 'moyen', dogSex: '', dogEmoji: '🐕', rationPct: 2.5, cycleWeeks: 1, anchorMonday: mondayOf(todayISO()),
       journal: {}, weights: [], fed: [], rotation: {}, doses: {}, documents: [], vaccinations: [],
       identity: { chipNumber: '', chipPhoto: '', identDate: '', identVet: '', prevOwner: '', prevVet: '' } };
     // rappels de base pour un nouveau chien (dates à renseigner)
@@ -180,6 +180,8 @@ Avion : cabine pour les petits gabarits (selon compagnie), sinon soute pressuris
     s.settings.dogBirthdate = d.dogBirthdate || '';
     s.settings.dogBreed = d.dogBreed || '';
     s.settings.dogSize = d.dogSize || 'moyen';
+    s.settings.dogSex = d.dogSex || '';
+    s.settings.dogEmoji = d.dogEmoji || '🐕';
     s.settings.rationPct = d.rationPct || 2.5;
     s.settings.cycleWeeks = d.cycleWeeks || 1;
     s.settings.anchorMonday = d.anchorMonday || mondayOf(todayISO());
@@ -666,7 +668,7 @@ En cas d'urgence : appeler AVANT de partir (l'équipe prépare l'arrivée), tran
       return state.dogs.map((d) => {
         const active = d.id === state.currentDogId;
         const src = active ? state.settings : d;
-        return { id: d.id, active, name: active ? src.dogName : d.dogName, birthdate: src.dogBirthdate, breed: src.dogBreed || '', size: src.dogSize || 'moyen' };
+        return { id: d.id, active, name: active ? src.dogName : d.dogName, birthdate: src.dogBirthdate, breed: src.dogBreed || '', size: src.dogSize || 'moyen', sex: src.dogSex || '', emoji: src.dogEmoji || '🐕' };
       });
     },
     // Libellé du gabarit + % de ration suggéré selon gabarit et âge (chiot = plus)
@@ -694,7 +696,7 @@ En cas d'urgence : appeler AVANT de partir (l'équipe prépare l'arrivée), tran
     },
     updateDogMeta(id, patch) {
       commit((s) => {
-        const map = { name: 'dogName', birthdate: 'dogBirthdate', breed: 'dogBreed', size: 'dogSize' };
+        const map = { name: 'dogName', birthdate: 'dogBirthdate', breed: 'dogBreed', size: 'dogSize', sex: 'dogSex', emoji: 'dogEmoji' };
         if (id === s.currentDogId) {
           Object.keys(map).forEach((k) => { if (patch[k] != null) s.settings[map[k]] = patch[k]; });
         } else {

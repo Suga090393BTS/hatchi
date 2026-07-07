@@ -74,6 +74,13 @@ input, select, textarea { font-family: inherit; font-size: 16px; }
 .sync-pill.synced .dot { background: #8fe3b0; }
 .sync-pill.error .dot { background: #ff9b87; }
 
+/* ---------- Barre des chiens (sous le bandeau) ---------- */
+.dogbar {
+  display: flex; gap: 8px; align-items: center;
+  padding: 10px 16px 0; overflow-x: auto; -webkit-overflow-scrolling: touch;
+}
+.dogbar .chip { flex: none; }
+
 /* ---------- View / layout ---------- */
 .view { flex: 1; padding: 16px 16px 96px; }
 .section-title { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .6px; color: var(--ink-soft); margin: 22px 4px 10px; }
