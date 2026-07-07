@@ -546,6 +546,23 @@ En cas d'urgence : appeler AVANT de partir (l'équipe prépare l'arrivée), tran
   function emit() { listeners.forEach((fn) => fn(state)); }
   function setSync(s) { syncStatus = s; syncListeners.forEach((fn) => fn(s)); }
 
+  // « État vide » = un état qui ne contient AUCUNE donnée saisie par l'utilisatrice
+  // (seulement les valeurs par défaut : ingrédients, soins, repas, pharmacie, personnes seedés).
+  // Sert de garde-fou anti-écrasement : on ne pousse jamais un tel état sur le cloud,
+  // et on le remplace automatiquement par le cloud s'il contient, lui, des données.
+  function isEmptyish(s) {
+    if (!s) return true;
+    const some = (a) => Array.isArray(a) && a.length > 0;
+    const keys = (o) => o && typeof o === 'object' && Object.keys(o).length > 0;
+    const histo = (ts) => Array.isArray(ts) && ts.some((t) => some(t.history));
+    const dogHasData = (d) => some(d.vaccinations) || some(d.weights) || some(d.fed) ||
+      keys(d.journal) || histo(d.treatments) || keys(d.rotation);
+    const rootData = some(s.purchases) || some(s.fed) || some(s.weights) || some(s.vaccinations) ||
+      keys(s.journal) || keys(s.stock) || keys(s.fridge) || keys(s.rotation) || histo(s.treatments);
+    const dogsData = Array.isArray(s.dogs) && s.dogs.some(dogHasData);
+    return !(rootData || dogsData);
+  }
+
   // Mutate state then persist + (debounced) push to cloud
   function commit(mutator, opts) {
     opts = opts || {};
@@ -603,7 +620,12 @@ En cas d'urgence : appeler AVANT de partir (l'équipe prépare l'arrivée), tran
     if (data && data.data) {
       const remote = data.data;
       const remoteTs = remote.updatedAt || 0;
-      if (preferRemote || remoteTs > state.updatedAt) {
+      const localTs = state.updatedAt || 0;
+      const localEmpty = isEmptyish(state);
+      const remoteEmpty = isEmptyish(remote);
+      // On adopte le cloud si : on force, OU le cloud est plus récent,
+      // OU le local est vide alors que le cloud a des données (récupération auto après un effacement).
+      if (preferRemote || remoteTs > localTs || (localEmpty && !remoteEmpty)) {
         // remote wins (garder les clés de connexion locales)
         const keepConn = {
           supabaseUrl: state.settings.supabaseUrl,
@@ -614,16 +636,19 @@ En cas d'urgence : appeler AVANT de partir (l'équipe prépare l'arrivée), tran
         state.settings = Object.assign(state.settings, keepConn);
         persistLocal();
         emit();
-      } else if (state.updatedAt > remoteTs) {
-        await push();
+      } else if (!localEmpty && localTs > remoteTs) {
+        await push(); // local plus récent ET non vide → on met le cloud à jour
       }
     } else {
-      await push(); // première écriture
+      await push(); // première écriture (ignorée si l'état local est vide, cf. garde-fou)
     }
   }
 
   async function push() {
     if (!supa) return;
+    // GARDE-FOU : ne jamais écraser le cloud avec un état vide (ex. iOS a effacé le stockage local).
+    // Sans données à sauvegarder, un push ne peut que détruire une bonne copie distante → on l'ignore.
+    if (isEmptyish(state)) { setSync('synced'); return; }
     try {
       setSync('syncing');
       const payload = Object.assign({}, state);
@@ -634,10 +659,52 @@ En cas d'urgence : appeler AVANT de partir (l'équipe prépare l'arrivée), tran
         .upsert({ id: state.settings.spaceId, data: payload, updated_at: new Date().toISOString() });
       if (error) throw error;
       setSync('synced');
+      backupDaily(); // sauvegarde quotidienne automatique (silencieuse, en arrière-plan)
     } catch (e) {
       console.warn('push error', e);
       setSync('error');
     }
+  }
+
+  // Sauvegarde automatique quotidienne dans le cloud : une ligne « espace__bak__AAAA-MM-JJ »,
+  // rotation sur les 14 derniers jours. Silencieuse — ne doit jamais gêner l'utilisation.
+  // Permet de revenir en arrière même si la ligne principale a été abîmée (cf. Store.backups/restoreBackup).
+  async function backupDaily() {
+    if (!supa || isEmptyish(state)) return;
+    try {
+      const space = state.settings.spaceId || 'hatchi';
+      const prefix = space + '__bak__';
+      const payload = Object.assign({}, state);
+      payload.settings = Object.assign({}, state.settings, { supabaseUrl: '', supabaseKey: '' });
+      await supa.from('hatchi_state').upsert({ id: prefix + todayISO(), data: payload, updated_at: new Date().toISOString() });
+      const { data } = await supa.from('hatchi_state').select('id').like('id', prefix + '%').order('id', { ascending: false });
+      if (data && data.length > 14) {
+        const old = data.slice(14).map((r) => r.id);
+        if (old.length) await supa.from('hatchi_state').delete().in('id', old);
+      }
+    } catch (e) { /* silencieux : la sauvegarde auto ne bloque jamais rien */ }
+  }
+
+  // Liste des sauvegardes auto disponibles dans le cloud (pour l'écran Réglages).
+  async function listBackups() {
+    if (!supa) return [];
+    const prefix = (state.settings.spaceId || 'hatchi') + '__bak__';
+    const { data, error } = await supa
+      .from('hatchi_state')
+      .select('id, updated_at')
+      .like('id', prefix + '%')
+      .order('id', { ascending: false });
+    if (error) throw error;
+    return (data || []).map((r) => ({ id: r.id, day: r.id.slice(prefix.length), updatedAt: r.updated_at }));
+  }
+
+  // Restaure une sauvegarde nommée : remet ces données en local ET les repousse comme version courante.
+  async function restoreBackup(id) {
+    if (!supa) throw new Error('Synchronisation inactive');
+    const { data, error } = await supa.from('hatchi_state').select('data').eq('id', id).maybeSingle();
+    if (error) throw error;
+    if (!data || !data.data) throw new Error('Sauvegarde introuvable');
+    Store.replaceState(data.data); // remet en local, met à jour la date, et repousse vers le cloud principal
   }
 
   async function testConnection(url, key, spaceId) {
@@ -1445,6 +1512,8 @@ En cas d'urgence : appeler AVANT de partir (l'équipe prépare l'arrivée), tran
     forcePull: () => pull(true),
     forcePush: () => push(),
     testConnection,
+    backups: () => listBackups(),
+    restoreBackup: (id) => restoreBackup(id),
 
     /* ---- Backup ---- */
     exportJSON() { return JSON.stringify(state, null, 2); },

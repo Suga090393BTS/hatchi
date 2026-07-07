@@ -282,6 +282,37 @@ create policy "hatchi_all" on public.hatchi_state
   }
 
   /* ---------- Sync ---------- */
+  // Restauration en un geste depuis les sauvegardes automatiques du cloud (aucun fichier à gérer)
+  async function openCloudBackups() {
+    UI.toast('Chargement des sauvegardes…');
+    let list;
+    try { list = await Store.backups(); }
+    catch (e) { UI.toast('Erreur : ' + (e.message || 'lecture impossible')); return; }
+    if (!list.length) { UI.toast('Aucune sauvegarde automatique pour le moment'); return; }
+    const rows = list.map((b) => h('div.inline', { style: 'justify-content:space-between;gap:10px;padding:9px 2px;border-bottom:1px solid var(--line)' }, [
+      h('div', null, [h('strong', null, UI.fmtShortYear ? UI.fmtShortYear(b.day) : b.day), h('div.muted.small', null, 'sauvegarde automatique')]),
+      h('button.btn.sm', { onClick: () => confirmRestore(b) }, 'Restaurer')
+    ]));
+    UI.modal({ title: '↺ Sauvegardes du cloud', body: h('div', null, [
+      h('p.muted.small', { style: 'margin:0 4px 10px' }, 'Choisis une date pour remettre tes données telles qu’elles étaient ce jour-là. Tes appareils se mettront à jour automatiquement.'),
+      h('div', null, rows)
+    ]) });
+  }
+  function confirmRestore(b) {
+    const body = h('div', null, [
+      h('p', { style: 'margin:0 4px 14px' }, 'Restaurer la sauvegarde du ' + b.day + ' ? Tes données actuelles seront remplacées par celles de cette date.'),
+      h('div.modal-actions', null, [
+        h('button.btn.subtle', { onClick: () => UI.closeModal() }, 'Annuler'),
+        h('button.btn', { onClick: async () => {
+          UI.toast('Restauration…');
+          try { await Store.restoreBackup(b.id); UI.closeModal(); UI.toast('Restauré ✓'); App.go('today'); }
+          catch (e) { UI.toast('Échec : ' + (e.message || 'réessaie')); }
+        } }, 'Restaurer')
+      ])
+    ]);
+    UI.modal({ title: 'Confirmer la restauration', body });
+  }
+
   function syncCard() {
     const s = Store.get().settings;
     const connected = !!(s.supabaseUrl && s.supabaseKey);
@@ -308,6 +339,8 @@ create policy "hatchi_all" on public.hatchi_state
         connected ? h('button.btn.subtle', { onClick: async () => { UI.toast('Récupération…'); try { await Store.forcePull(); UI.toast('À jour ✓'); } catch (e) { UI.toast('Erreur'); } } }, '↓ Tirer') : null,
         connected ? h('button.btn.subtle', { onClick: async () => { await Store.forcePush(); UI.toast('Envoyé ✓'); } }, '↑ Pousser') : null
       ]),
+      connected ? h('p.muted.small', { style: 'margin:10px 4px 4px' }, '🛡️ Tes données sont sauvegardées automatiquement dans le cloud, chaque jour (14 derniers jours). Rien à exporter à la main.') : null,
+      connected ? h('button.btn.subtle.sm', { style: 'margin-top:4px', onClick: openCloudBackups }, '↺ Restaurer une sauvegarde') : null,
       h('details', { style: 'margin-top:12px' }, [
         h('summary', { style: 'cursor:pointer;font-weight:700;font-size:14px;color:var(--green)' }, 'Voir le script SQL à exécuter'),
         h('pre', { style: 'background:#1e2a26;color:#d6efe5;padding:12px;border-radius:10px;overflow:auto;font-size:12px;margin-top:8px' }, SCHEMA_SQL),
