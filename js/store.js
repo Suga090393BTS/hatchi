@@ -172,6 +172,7 @@ Avion : cabine pour les petits gabarits (selon compagnie), sinon soute pressuris
       purchases: [],             // [{id, date, items:[{ingredientId, qty}], cost}]
       cuts: seedCuts(),          // morceaux suggérés (['cuisse', 'bavette', …])
       fed: [],                   // repas réellement donnés : [{id, date, slot, items:[{ingredientId, qty}]}]
+      todos: [],                 // choses à faire : [{id, text, done, doneAt}]
       moods: seedMoods(),        // humeurs proposées dans le journal
       pharmacy: seedPharmacy(),  // fiches médicaments/produits : [{id, name, dose, actives, notes}]
       identity: { chipNumber: '', chipPhoto: '', identDate: '', identVet: '', prevOwner: '', prevVet: '' }, // puce, véto identificateur, ancien détenteur/véto
@@ -310,6 +311,7 @@ Avion : cabine pour les petits gabarits (selon compagnie), sinon soute pressuris
     if (!Array.isArray(s.cuts)) s.cuts = seedCuts();
     if (!Array.isArray(s.fed)) s.fed = [];
     if (!Array.isArray(s.moods)) s.moods = seedMoods();
+    if (!Array.isArray(s.todos)) s.todos = [];
     if (!Array.isArray(s.pharmacy)) s.pharmacy = [];
     s.identity = Object.assign({}, base.identity, s.identity || {});
     s.vetCurrent = Object.assign({}, base.vetCurrent, s.vetCurrent || {});
@@ -918,6 +920,24 @@ En cas d'urgence : appeler AVANT de partir (l'équipe prépare l'arrivée), tran
         s.treatments.forEach((t) => { if (t.medId === id) t.medId = null; }); // les journées gardent le nom copié
       });
     },
+
+    /* ---- Choses à faire (tableau de bord) ---- */
+    // Visibles : non faites, ou faites aujourd'hui (elles disparaissent le lendemain)
+    todosVisible() { const today = todayISO(); return state.todos.filter((t) => !t.done || t.doneAt === today); },
+    addTodo(text) {
+      text = (text || '').trim();
+      if (!text) return null;
+      const t = { id: uid(), text, done: false, doneAt: '' };
+      commit((s) => s.todos.push(t));
+      return t;
+    },
+    toggleTodo(id) {
+      commit((s) => {
+        const t = s.todos.find((x) => x.id === id);
+        if (t) { t.done = !t.done; t.doneAt = t.done ? todayISO() : ''; }
+      });
+    },
+    removeTodo(id) { commit((s) => { s.todos = s.todos.filter((x) => x.id !== id); }); },
 
     /* ---- Humeurs (liste modifiable du journal) ---- */
     moods: () => state.moods.slice(),

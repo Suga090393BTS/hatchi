@@ -168,6 +168,30 @@
     ]);
   }
 
+  // Choses à faire : tâches libres, cochables (les faites disparaissent le lendemain)
+  function todosCard() {
+    const todos = Store.todosVisible();
+    const card = h('div.card');
+    todos.forEach((t) => {
+      card.appendChild(h('div.inline', { style: 'gap:10px;padding:5px 2px;align-items:center' }, [
+        h('button', { style: 'border:0;background:none;font-size:19px;padding:0;cursor:pointer', onClick: () => Store.toggleTodo(t.id) }, t.done ? '✅' : '⬜'),
+        h('span', { style: 'flex:1;font-size:14.5px' + (t.done ? ';text-decoration:line-through;opacity:.55' : ''), onClick: () => Store.toggleTodo(t.id) }, t.text),
+        h('button.delete-x', { onClick: () => Store.removeTodo(t.id) }, '✕')
+      ]));
+    });
+    if (!todos.length) card.appendChild(h('div.muted.small', { style: 'padding:2px 2px 4px' }, 'Ajoute ici ce que tu ne veux pas oublier (RDV véto, harnais à racheter…).'));
+    const inp = h('input.input', { placeholder: 'Ex. prendre RDV véto…', style: 'flex:1' });
+    const add = () => {
+      if (!inp.value.trim()) { UI.toast('Écris la tâche d\'abord'); return; }
+      Store.addTodo(inp.value);
+      inp.value = '';
+      inp.blur(); // déclenche le rafraîchissement différé
+    };
+    inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } });
+    card.appendChild(h('div.inline', { style: 'gap:8px;margin-top:8px' }, [inp, h('button.btn.sm', { onClick: add }, '+ Ajouter')]));
+    return card;
+  }
+
   function rationCard(iso) {
     const reco = Store.recommendedRation();
     const planned = Store.dayPlannedGrams(iso);
@@ -232,8 +256,10 @@
       root.appendChild(h('div.section-title', null, 'Activités'));
       root.appendChild(sortiesCard(iso));
 
+      root.appendChild(h('div.section-title', null, 'À faire'));
       const soins = todaySoins(iso);
-      if (soins) { root.appendChild(h('div.section-title', null, 'À faire')); root.appendChild(soins); }
+      if (soins) root.appendChild(soins);
+      root.appendChild(todosCard());
 
       // Note rapide du jour
       const entry = Store.dayEntry(iso);
