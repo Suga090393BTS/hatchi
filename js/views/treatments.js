@@ -114,12 +114,14 @@
 
   /* ---------- Poids ---------- */
   function weightChart(data) {
-    // data: [{date, kg}] trié
+    // data: [{date, kg}] trié — avec couloir de norme (gabarit + âge), façon courbe de croissance
     const W = 320, H = 150, pad = { l: 30, r: 12, t: 12, b: 22 };
-    const xs = data.map((d, i) => i);
     const kgs = data.map((d) => d.kg);
-    let min = Math.min.apply(null, kgs), max = Math.max.apply(null, kgs);
-    if (min === max) { min -= 1; max += 1; } else { const m = (max - min) * 0.15; min -= m; max += m; }
+    const norms = data.map((d) => Store.weightNormAt(d.date));
+    let min = Math.min.apply(null, kgs.concat(norms.map((n) => n.min)));
+    let max = Math.max.apply(null, kgs.concat(norms.map((n) => n.max)));
+    if (min === max) { min -= 1; max += 1; } else { const m = (max - min) * 0.12; min -= m; max += m; }
+    min = Math.max(0, min);
     const px = (i) => pad.l + (data.length <= 1 ? 0 : (i / (data.length - 1)) * (W - pad.l - pad.r));
     const py = (kg) => pad.t + (1 - (kg - min) / (max - min)) * (H - pad.t - pad.b);
     const ptsArr = data.map((d, i) => [px(i), py(d.kg)]);
@@ -135,10 +137,19 @@
       svg.appendChild(el('line', { x1: pad.l, y1: py(v), x2: W - pad.r, y2: py(v), stroke: '#e7e1d6', 'stroke-width': 1 }));
       const t = el('text', { x: 2, y: py(v) + 4, 'font-size': 9, fill: '#5d6b66' }); t.textContent = v.toFixed(1); svg.appendChild(t);
     });
+    // couloir « dans la norme » (vert clair) + bordures pointillées
+    const xTop = data.length <= 1 ? [[pad.l, norms[0]], [W - pad.r, norms[0]]] : norms.map((n, i) => [px(i), n]);
+    const topPts = xTop.map(([x, n]) => x.toFixed(1) + ' ' + py(n.max).toFixed(1));
+    const botPts = xTop.slice().reverse().map(([x, n]) => x.toFixed(1) + ' ' + py(n.min).toFixed(1));
+    svg.appendChild(el('path', { d: 'M ' + topPts.join(' L ') + ' L ' + botPts.join(' L ') + ' Z', fill: 'rgba(63,157,107,.15)' }));
+    [['max'], ['min']].forEach(([k]) => {
+      svg.appendChild(el('path', { d: 'M ' + xTop.map(([x, n]) => x.toFixed(1) + ' ' + py(n[k]).toFixed(1)).join(' L '), fill: 'none', stroke: '#3f9d6b', 'stroke-width': 1, 'stroke-dasharray': '4 3', opacity: .7 }));
+    });
     svg.appendChild(el('path', { d: area, fill: 'rgba(31,111,92,.12)' }));
     svg.appendChild(el('path', { d: line, fill: 'none', stroke: '#1f6f5c', 'stroke-width': 2.5, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' }));
     ptsArr.forEach((p, i) => {
-      svg.appendChild(el('circle', { cx: p[0], cy: p[1], r: 3.5, fill: '#fff', stroke: '#1f6f5c', 'stroke-width': 2 }));
+      const out = data[i].kg < norms[i].min || data[i].kg > norms[i].max;
+      svg.appendChild(el('circle', { cx: p[0], cy: p[1], r: 3.5, fill: '#fff', stroke: out ? '#c8553d' : '#1f6f5c', 'stroke-width': 2 }));
       if (i === data.length - 1) { const t = el('text', { x: p[0], y: p[1] - 8, 'font-size': 11, 'font-weight': 700, fill: '#185647', 'text-anchor': 'end' }); t.textContent = data[i].kg + ' kg'; svg.appendChild(t); }
     });
     return h('div.chart-wrap', null, svg);
@@ -176,7 +187,26 @@
           h('div', null, [h('div.muted.small', null, 'Poids actuel'), h('div', { style: 'font-size:26px;font-weight:800;color:var(--green-700)' }, last.kg + ' kg')]),
           prev ? h('span', { class: 'badge ' + (delta > 0 ? 'soon' : delta < 0 ? 'info' : 'ok') }, (delta > 0 ? '▲ +' : delta < 0 ? '▼ ' : '= ') + Math.abs(delta).toFixed(1) + ' kg') : null
         ]),
-        data.length >= 2 ? weightChart(data) : h('div.muted.small', null, 'Ajoutez une 2ᵉ pesée pour voir la courbe.')
+        data.length >= 2 ? weightChart(data) : h('div.muted.small', null, 'Ajoutez une 2ᵉ pesée pour voir la courbe.'),
+        // Verdict « dans la norme ? » façon courbe de croissance du carnet de santé
+        (() => {
+          const norm = Store.weightNormAt(last.date);
+          const st = last.kg < norm.min ? 'bas' : last.kg > norm.max ? 'haut' : 'ok';
+          const gabarit = Store.sizeLabel(Store.get().settings.dogSize).toLowerCase();
+          const quand = norm.months != null && !norm.adult ? gabarit + ' de ' + norm.months + ' mois' : gabarit + ' adulte';
+          return h('div', { style: 'margin-top:10px' }, [
+            h('div.inline', { style: 'gap:8px;flex-wrap:wrap' }, [
+              st === 'ok' ? h('span.badge.ok', null, '✅ Dans la norme')
+                : st === 'bas' ? h('span.badge.due', null, '⚠️ Sous la norme')
+                : h('span.badge.soon', null, '⚠️ Au-dessus de la norme'),
+              h('span.small.muted', null, 'Norme indicative : ' + norm.min + '–' + norm.max + ' kg pour un ' + quand)
+            ]),
+            st !== 'ok' ? h('p.small', { style: 'margin:6px 2px 0;color:' + (st === 'bas' ? 'var(--red)' : 'var(--amber)') + ';font-weight:600' },
+              st === 'bas' ? 'Poids un peu léger : augmente les rations et surveille — parles-en au véto si ça persiste.'
+                           : 'Poids un peu élevé : réduis un peu les rations/friandises et surveille — le véto confirmera.') : null,
+            h('p.muted.small', { style: 'margin:6px 2px 0' }, 'Le couloir vert de la courbe = fourchette par gabarit selon l\'âge (comme le carnet de santé des bébés). La norme fine dépend de la race — règle le gabarit dans Réglages et valide avec ton véto.')
+          ]);
+        })()
       ]));
 
       root.appendChild(h('div.section-title', null, 'Historique'));

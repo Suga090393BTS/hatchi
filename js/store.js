@@ -872,6 +872,20 @@ En cas d'urgence : appeler AVANT de partir (l'équipe prépare l'arrivée), tran
     },
 
     /* ---- Poids ---- */
+    // Fourchette de poids « dans la norme » à une date donnée, selon gabarit + âge (courbe de croissance).
+    // Indicatif : fourchettes par gabarit, à affiner selon la race avec le vétérinaire.
+    weightNormAt(iso) {
+      const size = state.settings.dogSize || 'moyen';
+      const RANGES = { petit: [3, 10], moyen: [10, 25], grand: [25, 45], geant: [45, 70] };   // poids adulte (kg)
+      const MATURITY = { petit: 10, moyen: 12, grand: 18, geant: 24 };                        // âge adulte (mois)
+      const range = RANGES[size] || RANGES.moyen;
+      const birth = state.settings.dogBirthdate;
+      if (!birth) return { min: range[0], max: range[1], adult: true, months: null };
+      const months = Math.max(0, daysBetween(birth, iso || todayISO()) / 30.44);
+      const r = Math.min(1, months / (MATURITY[size] || 12));
+      const f = Math.max(0.08, r * (2 - r)); // croissance rapide au début puis plateau
+      return { min: +(range[0] * f).toFixed(1), max: +(range[1] * f).toFixed(1), adult: r >= 1, months: Math.round(months) };
+    },
     weightsSorted() { return state.weights.slice().sort((a, b) => a.date.localeCompare(b.date)); },
     lastWeight() { const w = this.weightsSorted(); return w.length ? w[w.length - 1] : null; },
     addWeight(date, kg) {
