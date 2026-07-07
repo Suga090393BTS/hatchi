@@ -24,6 +24,18 @@
     }).filter(Boolean);
   }
 
+  // Résumé compact d'un repas sur une ligne : « Poulet 300 g · Carotte 100 g »
+  function mealSummary(items) {
+    const parts = (items || []).map((it) => {
+      const ing = Store.ingredient(it.ingredientId);
+      if (!ing) return null;
+      return ing.name + ' ' + (ing.unit === 'piece' ? '×' + it.qty : grams(it.qty));
+    }).filter(Boolean);
+    return parts.length ? parts.join(' · ') : null;
+  }
+
+  // Un repas = un « onglet déroulant » : ligne compacte toujours visible (résumé) ;
+  // on touche l'en-tête pour dérouler le détail + le bouton « J'ai donné ».
   function mealSlot(slot, label, ic, iso) {
     const planned = Store.itemsForDay(iso, slot);
     const fed = Store.fedForSlot(iso, slot);
@@ -31,19 +43,33 @@
     const done = !!fed || !!entry[slot === 'matin' ? 'repasMatin' : 'repasSoir'];
     // le prévu de la rotation sert de pré-remplissage — modifiable librement à la saisie
     const presetItems = planned.map((it) => ({ ingredientId: it.ingredientId, qty: it.qty }));
+    const summary = mealSummary(fed ? fed.items : planned) || 'À noter';
 
-    return h('div', { class: 'meal-slot' + (done ? ' done' : '') }, [
-      h('div.slot-label', null, [h('span', null, ic), h('span', null, label),
-        done ? h('span.badge.ok', { style: 'margin-left:auto' }, '✓ donné') : null]),
-      h('div.slot-body', null,
-        fed ? itemLines(fed.items)
-            : planned.length
-              ? [h('div.muted.small', { style: 'margin-bottom:4px' }, 'Suggestion (rotation) :')].concat(itemLines(planned))
-              : h('div.muted.small', null, 'Note ce que tu donnes, même sans planification.')),
+    const body = h('div', null,
+      fed ? itemLines(fed.items)
+          : planned.length
+            ? [h('div.muted.small', { style: 'margin-bottom:4px' }, 'Suggestion (rotation) :')].concat(itemLines(planned))
+            : h('div.muted.small', null, 'Note ce que tu donnes, même sans planification.'));
+    const details = h('div.meal-details', null, [
+      body,
       fed
         ? h('button.btn.sm.subtle', { style: 'margin-top:10px;width:100%', onClick: () => Views.openFedEditor(fed) }, 'Modifier ce qui a été donné')
         : h('button.btn.sm.ghost', { style: 'margin-top:10px;width:100%', onClick: () => Views.openFedEditor(null, { date: iso, slot, presetItems }) }, '🍽 J\'ai donné…')
     ]);
+
+    const card = h('div', { class: 'meal-slot slot-' + slot + (done ? ' done' : '') }, [
+      h('div.slot-head', { onClick: () => card.classList.toggle('open') }, [
+        h('div.slot-ic', null, ic),
+        h('div.slot-main', null, [
+          h('div.slot-title', null, label),
+          h('div.slot-sum', null, summary)
+        ]),
+        done ? h('span.badge.ok', null, '✓') : null,
+        h('span.chev', null, '›')
+      ]),
+      details
+    ]);
+    return card;
   }
 
   // Rappels de soins urgents/à venir — renvoie null s'il n'y a rien (pas de bloc inutile)
@@ -273,11 +299,18 @@
     render(root) {
       const iso = Store.todayISO();
 
-      // 1) Alerte stock (uniquement si besoin)
+      // Alerte stock (uniquement si besoin) — reste tout en haut
       const alert = lowStockAlert();
       if (alert) root.appendChild(alert);
 
-      // 2) Les repas du jour — l'action principale (matin + soir réunis dans une seule carte)
+      // 1) La journée — noter d'abord (ordre choisi : Journal en haut)
+      root.appendChild(h('div.section-title', null, 'La journée'));
+      root.appendChild(h('div.inline', { style: 'gap:8px' }, [
+        h('button.btn', { style: 'flex:1', onClick: () => Views.openDayEditor(iso) }, '📝 Noter la journée'),
+        h('button.btn.subtle', { style: 'flex:1', onClick: () => (Views.openCalendar ? Views.openCalendar() : App.go('journal')) }, '📅 Calendrier')
+      ]));
+
+      // 2) Les repas du jour — matin + soir réunis, déroulants (résumé compact par défaut)
       root.appendChild(h('div.section-title', null, 'Repas du jour'));
       root.appendChild(h('div.card.meals', null, [
         mealSlot('matin', 'Matin', '🌅', iso),
@@ -293,13 +326,6 @@
       // 4) À faire — soins du jour + tâches, dans une seule carte
       root.appendChild(h('div.section-title', null, 'À faire'));
       root.appendChild(aFaireCard(iso));
-
-      // 5) La journée — tout le reste (sorties, humeur, note, photo) se saisit dans la fiche
-      root.appendChild(h('div.section-title', null, 'La journée'));
-      root.appendChild(h('div.inline', { style: 'gap:8px' }, [
-        h('button.btn', { style: 'flex:1', onClick: () => Views.openDayEditor(iso) }, '📝 Noter la journée'),
-        h('button.btn.subtle', { style: 'flex:1', onClick: () => (Views.openCalendar ? Views.openCalendar() : App.go('journal')) }, '📅 Calendrier')
-      ]));
     }
   };
 })();
