@@ -222,19 +222,23 @@
     ]);
   }
 
+  // Alerte stock compacte : une ligne, tap → Courses (le détail complet est dans Courses → Achats)
   function lowStockAlert() {
     const low = Store.lowStock();
     if (!low.length) return null;
-    return h('div.card', { style: 'background:var(--amber-100);border-color:#eccf9a' }, [
-      h('div.inline', { style: 'gap:10px' }, [
-        h('span', { style: 'font-size:22px' }, '🧊'),
-        h('div', { style: 'flex:1' }, [
-          h('strong', null, 'Bientôt épuisé'),
-          h('div.small', null, low.map((x) => x.ing.name + ' (reste ' + (x.days < 1 ? '<1' : '~' + Math.floor(x.days)) + ' j)').join(', '))
-        ]),
-        h('button.btn.ghost.sm', { onClick: () => App.go('shopping') }, 'Achats')
-      ])
-    ]);
+    const noms = low.slice(0, 3).map((x) => x.ing.name).join(', ');
+    const reste = low.length - 3;
+    return h('button.card', {
+      style: 'background:var(--amber-100);width:100%;text-align:left;cursor:pointer;padding:12px 16px',
+      onClick: () => App.go('shopping')
+    }, h('div.inline', { style: 'gap:10px' }, [
+      h('span', { style: 'font-size:20px' }, '🧊'),
+      h('div', { style: 'flex:1;min-width:0' }, [
+        h('strong', { style: 'font-size:14.5px' }, low.length + ' ingrédient' + (low.length > 1 ? 's' : '') + ' bientôt épuisé' + (low.length > 1 ? 's' : '')),
+        h('div.small.muted', { style: 'white-space:nowrap;overflow:hidden;text-overflow:ellipsis' }, noms + (reste > 0 ? ' +' + reste + ' autres' : ''))
+      ]),
+      h('span.muted', null, '›')
+    ]));
   }
 
   Views.today = {
