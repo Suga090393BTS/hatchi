@@ -433,6 +433,7 @@ ${s.settings.dogBirthdate ? `<p class="muted">Né(e) le ${UI.fmtShortYear(s.sett
   }
 
   Views.openDayEditor = openEditor; // utilisé par le tableau de bord (fiche du jour)
+  Views.openCalendar = () => { mode = 'mois'; App.go('journal'); }; // bouton 📅 Calendrier
 
   Views.journal = {
     render(root) {

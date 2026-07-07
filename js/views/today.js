@@ -46,18 +46,14 @@
     ]);
   }
 
+  // Rappels de soins urgents/à venir — renvoie null s'il n'y a rien (pas de bloc inutile)
   function reminders(iso) {
     const due = Store.get().treatments
       .map((t) => ({ t, st: Store.dueStatus(t, iso) }))
       .filter((x) => x.st.state === 'overdue' || x.st.state === 'soon')
       .sort((a, b) => (a.st.days ?? 999) - (b.st.days ?? 999));
 
-    if (!due.length) {
-      return h('div.card', null, h('div.inline', null, [
-        h('span', { style: 'font-size:22px' }, '✅'),
-        h('div', null, [h('strong', null, 'Aucun soin urgent'), h('div.muted.small', null, 'Tout est à jour côté traitements.')])
-      ]));
-    }
+    if (!due.length) return null;
     return h('div.card.flush', null, due.map(({ t, st }) => {
       const overdue = st.state === 'overdue';
       return h('div.row', null, [
@@ -125,7 +121,6 @@
     }) : [];
 
     return h('div.card', null, [
-      h('div.card-head', null, [h('h3', null, 'Sorties & activités')]),
       h('div.chip-row', null, SORTIES.map((s) =>
         h('button', {
           class: 'chip' + (sorties[s.key] ? ' on' : ''),
@@ -245,9 +240,11 @@
     render(root) {
       const iso = Store.todayISO();
 
+      // 1) Alerte stock (uniquement si besoin)
       const alert = lowStockAlert();
       if (alert) root.appendChild(alert);
 
+      // 2) Les repas du jour — l'action principale
       root.appendChild(h('div.section-title', null, 'Repas du jour'));
       root.appendChild(h('div.hero-meal', null, [
         mealSlot('matin', 'Matin', '🌅', iso),
@@ -255,30 +252,31 @@
       ]));
       root.appendChild(rationCard(iso));
 
-      root.appendChild(h('div.section-title', null, 'Rappels soins'));
-      root.appendChild(reminders(iso));
-
-      root.appendChild(h('div.section-title', null, 'Activités'));
-      root.appendChild(sortiesCard(iso));
-
-      root.appendChild(h('div.section-title', null, 'À faire'));
+      // 3) À faire aujourd'hui — soins urgents (si besoin) + soins du jour + tâches libres
+      root.appendChild(h('div.section-title', null, 'À faire aujourd’hui'));
+      const rem = reminders(iso);
+      if (rem) root.appendChild(rem);
       const soins = todaySoins(iso);
       if (soins) root.appendChild(soins);
       root.appendChild(todosCard());
 
-      // Note rapide du jour
+      // 4) Sorties & activités
+      root.appendChild(h('div.section-title', null, 'Sorties & activités'));
+      root.appendChild(sortiesCard(iso));
+
+      // 5) Journal du jour — note rapide + accès calendrier
       const entry = Store.dayEntry(iso);
+      root.appendChild(h('div.section-title', null, 'Journal du jour'));
       root.appendChild(h('div.card', null, [
-        h('div.card-head', null, [h('h3', null, 'Note du jour'),
-          h('div.inline', { style: 'gap:12px' }, [
-            h('button.linkbtn', { onClick: () => Views.openDayEditor(iso) }, '📝 Fiche du jour'),
-            h('button.linkbtn', { onClick: () => App.go('journal') }, 'Journal →')
-          ])]),
         h('textarea.input', {
           placeholder: 'Selles, comportement, observations…',
           value: entry.notes || '',
           onChange: (e) => Store.updateDay(iso, { notes: e.target.value })
-        })
+        }),
+        h('div.inline', { style: 'gap:8px;margin-top:10px' }, [
+          h('button.btn.subtle', { style: 'flex:1', onClick: () => Views.openDayEditor(iso) }, '📝 Fiche du jour'),
+          h('button.btn.subtle', { style: 'flex:1', onClick: () => (Views.openCalendar ? Views.openCalendar() : App.go('journal')) }, '📅 Calendrier')
+        ])
       ]));
     }
   };
