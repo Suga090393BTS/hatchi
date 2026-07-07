@@ -354,15 +354,6 @@ create policy "hatchi_all" on public.hatchi_state
         ])
       ]));
 
-      // Apparence
-      root.appendChild(h('div.section-title', null, 'Apparence'));
-      root.appendChild(h('div.card', null, [
-        h('p.muted.small', { style: 'margin:0 0 10px' }, 'Choisis les couleurs de l\'app (appliqué sur tous les écrans).'),
-        h('div.chip-row', null, THEMES.map(([v, l, c]) => h('button', {
-          class: 'chip' + ((s.theme || 'foret') === v ? ' on' : ''),
-          onClick: () => { Store.updateSettings({ theme: v }); UI.toast(l); }
-        }, [h('span', { style: `width:11px;height:11px;border-radius:50%;background:${c};display:inline-block;flex:none;border:1.5px solid rgba(255,255,255,.6)` }), h('span', null, l)])))
-      ]));
 
       // Pharmacie
       root.appendChild(h('div.section-title', null, 'Pharmacie'));
@@ -432,8 +423,6 @@ create policy "hatchi_all" on public.hatchi_state
     }
   };
 
-  /* ---------- Apparence ---------- */
-  const THEMES = [['lagon', '🐚 Lagon', '#0d9488'], ['moderne', '✨ Moderne', '#6358d5'], ['foret', '🌿 Forêt', '#1f6f5c'], ['ocean', '🌊 Océan', '#2f6db5'], ['lilas', '💜 Lilas', '#7857c0'], ['terracotta', '🏺 Terracotta', '#c15f43']];
 
   function peopleCard() {
     const people = Store.get().people;

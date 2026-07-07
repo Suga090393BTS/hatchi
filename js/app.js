@@ -57,10 +57,10 @@
     renderDogBar();
   }
 
-  /* ---- Thème d'apparence (Réglages → Apparence) ---- */
+  /* ---- Couleur unique (définie dans le CSS) : on aligne juste la barre du navigateur ---- */
   function applyTheme() {
-    const t = Store.get().settings.theme || 'foret';
-    if (document.documentElement.dataset.theme !== t) document.documentElement.dataset.theme = t;
+    // plus de thème au choix : on retire tout attribut résiduel pour que la palette :root s'applique
+    if (document.documentElement.dataset.theme) delete document.documentElement.dataset.theme;
     const col = getComputedStyle(document.documentElement).getPropertyValue('--green').trim();
     const meta = document.querySelector('meta[name="theme-color"]');
     if (meta && col) meta.content = col;

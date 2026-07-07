@@ -1,63 +1,29 @@
 :root {
-  /* Palette */
-  --green: #1f6f5c;
-  --green-700: #185647;
-  --green-100: #e3f1ec;
-  --sand: #f6f1e7;
-  --bg: #faf7f1;
+  /* Palette unique, épurée : ardoise profonde sur blanc neutre, accents très adoucis */
+  --green: #2b3a45;
+  --green-700: #1b262d;
+  --green-100: #eceff1;
+  --sand: #f0f1f2;
+  --bg: #f7f8f8;
   --card: #ffffff;
-  --ink: #23302c;
-  --ink-soft: #5d6b66;
-  --line: #e7e1d6;
-  --amber: #e0913a;
-  --amber-100: #fbeed7;
-  --red: #c8553d;
-  --red-100: #f7e1da;
-  --blue: #3a6ea5;
-  --blue-100: #e1ebf6;
-  --ok: #3f9d6b;
+  --ink: #1e262c;
+  --ink-soft: #6a7278;
+  --line: #e8eaec;
+  --amber: #a1782f;
+  --amber-100: #f1ece1;
+  --red: #a5564f;
+  --red-100: #efe8e7;
+  --blue: #4d6b86;
+  --blue-100: #e9edf1;
+  --ok: #3f8468;
 
   --radius: 20px;
   --radius-sm: 12px;
-  --shadow: 0 1px 2px rgba(35,48,44,.05), 0 6px 20px rgba(35,48,44,.06);
-  --shadow-pop: 0 12px 40px rgba(35,48,44,.18);
+  --shadow: 0 1px 2px rgba(30,38,44,.05), 0 6px 20px rgba(30,38,44,.06);
+  --shadow-pop: 0 12px 40px rgba(30,38,44,.16);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --safe-top: env(safe-area-inset-top, 0px);
   font-synthesis: none;
-}
-
-/* ---------- Thèmes (Réglages → Apparence) ---------- */
-/* « Lagon » (défaut) : turquoise profond sur blanc chaud — frais, doux, contrasté */
-html[data-theme="lagon"] {
-  --green: #0d9488; --green-700: #0b7268; --green-100: #d9f2ef;
-  --sand: #eef4f3; --bg: #fafcfc; --card: #ffffff;
-  --ink: #16333a; --ink-soft: #61797f; --line: #e2ecea;
-  --amber: #e08a1e; --amber-100: #fdf0da;
-  --red: #e05252; --red-100: #fce7e7;
-  --blue: #3d76e0; --blue-100: #e6eefb;
-  --ok: #15a06e;
-}
-/* « Moderne » : indigo doux sur gris froid clair */
-html[data-theme="moderne"] {
-  --green: #6358d5; --green-700: #4d43b3; --green-100: #edecfb;
-  --sand: #ededf3; --bg: #f6f6fa; --card: #ffffff;
-  --ink: #23243a; --ink-soft: #6f7288; --line: #e7e7f0;
-  --amber: #d9822b; --amber-100: #fbeedd;
-  --red: #e0474e; --red-100: #fbe5e7;
-  --blue: #3d76e0; --blue-100: #e6eefb;
-  --ok: #2f9e6e;
-}
-html[data-theme="ocean"] {
-  --green: #2f6db5; --green-700: #24558d; --green-100: #e3edf8;
-  --sand: #edf2f8; --bg: #f6f9fc; --ink: #22303e; --ink-soft: #5b6b7a; --line: #dfe7ef;
-}
-html[data-theme="lilas"] {
-  --green: #7857c0; --green-700: #5f44a0; --green-100: #eee9f9;
-  --sand: #f1edf8; --bg: #faf8fd; --ink: #2e2743; --ink-soft: #6d6484; --line: #e6dff2;
-}
-html[data-theme="terracotta"] {
-  --green: #c15f43; --green-700: #9d4a33; --green-100: #f9e7e0;
-  --sand: #f7efe9; --bg: #fcf8f5; --ink: #3a2c26; --ink-soft: #7c685e; --line: #eee0d6;
 }
 
 * { box-sizing: border-box; }
