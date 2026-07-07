@@ -57,14 +57,27 @@
         : h('button.btn.sm.ghost', { style: 'margin-top:10px;width:100%', onClick: () => Views.openFedEditor(null, { date: iso, slot, presetItems }) }, '🍽 J\'ai donné…')
     ]);
 
-    const card = h('div', { class: 'meal-slot slot-' + slot + (done ? ' done' : '') }, [
+    // Confort : le repas du créneau courant est déroulé d'office (matin le matin, soir le soir)
+    const hour = new Date().getHours();
+    const isCurrent = (slot === 'matin' && hour < 14) || (slot === 'soir' && hour >= 14);
+
+    // Confort : 1 tap « ✓ donné » enregistre le repas prévu sans ouvrir l'éditeur (reste modifiable)
+    const quickGive = (!done && planned.length)
+      ? h('button.quickgive', { onClick: (e) => {
+          e.stopPropagation();
+          Store.logFed({ date: iso, slot, items: presetItems });
+          UI.toast('Repas noté ✓ — modifiable dans le détail');
+        } }, '✓ donné')
+      : null;
+
+    const card = h('div', { class: 'meal-slot slot-' + slot + (done ? ' done' : '') + (isCurrent && !done ? ' open' : '') }, [
       h('div.slot-head', { onClick: () => card.classList.toggle('open') }, [
         h('div.slot-ic', null, ic),
         h('div.slot-main', null, [
           h('div.slot-title', null, label),
           h('div.slot-sum', null, summary)
         ]),
-        done ? h('span.badge.ok', null, '✓') : null,
+        done ? h('span.badge.ok', null, '✓ donné') : quickGive,
         h('span.chev', null, '›')
       ]),
       details

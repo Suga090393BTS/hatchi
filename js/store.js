@@ -540,8 +540,19 @@ En cas d'urgence : appeler AVANT de partir (l'équipe prépare l'arrivée), tran
     return s;
   }
 
+  let warnedStorageFull = false;
+  // Renvoie true si la sauvegarde locale a réussi. Avertit UNE fois quand on approche
+  // de la limite du navigateur (avant le mur), pour ne plus jamais échouer en silence.
   function persistLocal() {
-    try { localStorage.setItem(LS_KEY, JSON.stringify(state)); } catch (e) {}
+    try {
+      const str = JSON.stringify(state);
+      localStorage.setItem(LS_KEY, str);
+      if (!warnedStorageFull && str.length > 4300000 && window.UI && UI.toast) {
+        warnedStorageFull = true;
+        UI.toast('ℹ️ Beaucoup de données/photos — garde la synchro cloud active');
+      }
+      return true;
+    } catch (e) { return false; }
   }
   function emit() { listeners.forEach((fn) => fn(state)); }
   function setSync(s) { syncStatus = s; syncListeners.forEach((fn) => fn(s)); }
@@ -569,8 +580,18 @@ En cas d'urgence : appeler AVANT de partir (l'équipe prépare l'arrivée), tran
     mutator(state);
     syncActiveDog(state); // l'entrée du chien affiché suit toujours la racine
     state.updatedAt = Date.now();
-    persistLocal();
+    const saved = persistLocal();
     emit();
+    if (!saved) {
+      // Mémoire du téléphone pleine : on PRÉVIENT (fini le silence) et on force la sauvegarde
+      // cloud (non limitée) pour ne rien perdre. Objectif : ne plus jamais perdre en silence.
+      if (window.UI && UI.toast) {
+        UI.toast(supa ? '⚠️ Mémoire du téléphone pleine — sauvegarde envoyée au cloud'
+                      : '⚠️ Mémoire pleine — active la synchro cloud pour ne rien perdre');
+      }
+      if (supa) push();
+      return;
+    }
     if (!opts.silentCloud) schedulePush();
   }
 
