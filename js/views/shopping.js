@@ -19,6 +19,11 @@
     if (!ing || !ing.price) return 0;
     return ing.unit === 'piece' ? ing.price * qty : ing.price * (qty / 1000);
   }
+  // Étiquette de prix d'un ingrédient : produit maison (coût 0 €), prix, ou non défini
+  function priceLabel(ing) {
+    if (ing.free) return '🏡 produit maison · 0 €';
+    return ing.price ? money(ing.price) + (ing.unit === 'piece' ? '/u.' : '/kg') : 'prix non défini';
+  }
   // Affichage d'une quantité : pièces => "×N", sinon kg/g automatique
   function qtyLabel(ing, qty) {
     return ing.unit === 'piece' ? ('×' + Math.ceil(qty)) : grams(Math.round(qty));
@@ -87,7 +92,7 @@
           h('div.row-ic', null, catIcon(ing.category)),
           h('div.row-main', null, [
             h('strong', null, ing.name),
-            h('small', null, have ? ('déjà ' + qtyLabel(ing, have) + ' au congélo') : (ing.price ? money(ing.price) + (ing.unit === 'piece' ? '/u.' : '/kg') : 'prix non défini'))
+            h('small', null, have ? ('déjà ' + qtyLabel(ing, have) + ' au congélo') : priceLabel(ing))
           ]),
           h('div.row-end', null, [
             h('strong', null, qtyLabel(ing, qty) + ' à acheter'),
@@ -251,7 +256,7 @@
             h('div.row-ic', null, catIcon(l.ing.category)),
             h('div.row-main', null, [
               h('strong', null, l.ing.name + (l.cut ? ' (' + l.cut + ')' : '')),
-              h('small', null, qtyLabel(l.ing, l.qty) + (l.price ? ' · ' + money(l.price) : ' · prix non saisi'))
+              h('small', null, qtyLabel(l.ing, l.qty) + (l.price ? ' · ' + money(l.price) : (l.ing.free ? ' · 🏡 0 €' : ' · prix non saisi')))
             ]),
             h('div.row-end', null, h('button.delete-x', { onClick: (e) => { e.stopPropagation(); basket.splice(idx, 1); mainStep(); } }, '✕'))
           ])))
@@ -294,7 +299,7 @@
           h('div.row', { onClick: () => formStep(ing, null) }, [
             h('div.row-ic', null, catIcon(ing.category)),
             h('div.row-main', null, [h('strong', null, ing.name),
-              h('small', null, ing.price ? money(ing.price) + (ing.unit === 'piece' ? ' /pièce' : ' /kg') : 'prix non défini')]),
+              h('small', null, priceLabel(ing))]),
             h('div.row-end', null, h('span.muted', null, '›'))
           ]))));
       };
@@ -342,10 +347,12 @@
       const body = h('div', null, [
         h('datalist', { id: 'hatchi-cuts' }, Store.cuts().map((c) => h('option', { value: c }))),
         h('div.field', null, [h('label', null, piece ? 'Nombre (pièces)' : 'Poids acheté (kg)'), qtyIn]),
-        h('div.grid2', null, [
-          h('div.field', null, [h('label', null, piece ? 'Prix à la pièce (€)' : 'Prix au kilo (€/kg)'), ppkIn]),
-          h('div.field', null, [h('label', null, 'Prix total payé (€)'), totalIn])
-        ]),
+        ing.free
+          ? h('p.muted.small', { style: 'margin:0 4px 10px' }, '🏡 Produit maison — coût 0 €, rien à saisir.')
+          : h('div.grid2', null, [
+              h('div.field', null, [h('label', null, piece ? 'Prix à la pièce (€)' : 'Prix au kilo (€/kg)'), ppkIn]),
+              h('div.field', null, [h('label', null, 'Prix total payé (€)'), totalIn])
+            ]),
         cuttable ? h('div.field', null, [h('label', null, 'Morceau (facultatif)'),
           h('input.input', { placeholder: 'ex. cuisse, bavette, foie…', list: 'hatchi-cuts', value: d.cut, onInput: (e) => d.cut = e.target.value.trim() })]) : null,
         echo,

@@ -30,8 +30,20 @@ create policy "hatchi_all" on public.hatchi_state
         h('div.field', null, [h('label', null, 'Unité'),
           h('select.input', { onChange: (e) => d.unit = e.target.value }, [['g', 'grammes'], ['piece', 'pièce']].map(([v, l]) => h('option', { value: v, selected: v === d.unit }, l)))])
       ]),
-      h('div.field', null, [h('label', null, d.unit === 'piece' ? 'Prix à l’unité (€)' : 'Prix au kilo (€/kg)'),
-        h('input.input', { type: 'number', step: '0.01', min: '0', value: d.price, onInput: (e) => d.price = +e.target.value || 0 })]),
+      (() => {
+        const priceInput = h('input.input', { type: 'number', step: '0.01', min: '0', value: d.price, disabled: !!d.free, onInput: (e) => d.price = +e.target.value || 0 });
+        return h('div', null, [
+          h('div.field', null, [h('label', null, d.unit === 'piece' ? 'Prix à l’unité (€)' : 'Prix au kilo (€/kg)'), priceInput]),
+          h('div.field', null, h('label.inline', { style: 'gap:8px;cursor:pointer;font-size:14px;font-weight:600;text-transform:none;letter-spacing:0' }, [
+            h('input', { type: 'checkbox', checked: !!d.free, onChange: (e) => {
+              d.free = e.target.checked;
+              if (d.free) { d.price = 0; priceInput.value = 0; }
+              priceInput.disabled = d.free;
+            } }),
+            '🏡 Coût zéro € — je le produis moi-même'
+          ]))
+        ]);
+      })(),
       h('div.modal-actions', null, [
         !isNew ? h('button.btn.danger', { onClick: async () => { if (await UI.confirm('Supprimer cet ingrédient ?', { danger: true, ok: 'Supprimer' })) { Store.removeIngredient(ing.id); UI.closeModal(); } } }, '🗑')
                : h('button.btn.subtle', { onClick: () => UI.closeModal() }, 'Annuler'),
@@ -50,7 +62,7 @@ create policy "hatchi_all" on public.hatchi_state
       h('div.card.flush', null, Store.get().ingredients.map((ing) =>
         h('div.row', { onClick: () => { UI.closeModal(); setTimeout(() => openIngredientEditor(ing), 50); } }, [
           h('div.row-ic', null, ({ viande: '🥩', abats: '🫀', os: '🦴', entier: '🐔', oeuf: '🥚', legume: '🥕' })[ing.category] || '📦'),
-          h('div.row-main', null, [h('strong', null, ing.name), h('small', null, ing.price ? money(ing.price) + (ing.unit === 'piece' ? '/u.' : '/kg') : 'Prix non défini')]),
+          h('div.row-main', null, [h('strong', null, ing.name), h('small', null, ing.free ? '🏡 Produit maison · 0 €' : (ing.price ? money(ing.price) + (ing.unit === 'piece' ? '/u.' : '/kg') : 'Prix non défini'))]),
           h('div.row-end', null, h('span.muted', null, '›'))
         ]))),
       h('button.btn.block', { style: 'margin-top:10px', onClick: () => { UI.closeModal(); setTimeout(() => openIngredientEditor(null), 50); } }, '+ Nouvel ingrédient')

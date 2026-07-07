@@ -416,6 +416,14 @@ Avion : cabine pour les petits gabarits (selon compagnie), sinon soute pressuris
       s.healthPages = s.healthPages.concat(seedHealthPages().filter((p) => !have.has(p.title.toLowerCase())));
       s.seeded.healthPages = true;
     }
+    // Production maison : les œufs à prix 0 deviennent « coût zéro € » + ajout de l'œuf de caille
+    if (!s.seeded.homemadeEggs) {
+      s.ingredients.forEach((i) => { if (i.category === 'oeuf' && !i.price) i.free = true; });
+      if (!s.ingredients.some((i) => i.name.toLowerCase() === 'œuf de caille')) {
+        s.ingredients.push({ id: uid(), name: 'Œuf de caille', category: 'oeuf', unit: 'piece', price: 0, free: true });
+      }
+      s.seeded.homemadeEggs = true;
+    }
     // Fiche « Contacts vétérinaires » du carnet : ancien véto, urgences près de chez moi, ancien détenteur
     if (!s.seeded.contactsPage) {
       s.healthPages.unshift({
