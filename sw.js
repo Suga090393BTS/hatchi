@@ -1,5 +1,5 @@
 /* Hatchi service worker — offline app shell cache */
-const CACHE = 'hatchi-v42';
+const CACHE = 'hatchi-v43';
 const ASSETS = [
   './',
   './index.html',
@@ -21,7 +21,13 @@ const ASSETS = [
 ];
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(ASSETS)).then(() => self.skipWaiting()));
+  // 'reload' force le réseau (ignore le cache HTTP/CDN) => une nouvelle version met VRAIMENT
+  // à jour les fichiers, pas seulement le numéro de version.
+  e.waitUntil(
+    caches.open(CACHE)
+      .then((c) => Promise.all(ASSETS.map((u) => fetch(new Request(u, { cache: 'reload' })).then((res) => res.ok && c.put(u, res)))))
+      .then(() => self.skipWaiting())
+  );
 });
 
 self.addEventListener('activate', (e) => {
