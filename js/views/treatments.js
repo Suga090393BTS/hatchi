@@ -111,6 +111,8 @@
   }
 
   let tab = 'soins'; // 'soins' | 'poids'
+  // Ouvre l'onglet Soins directement sur une section (utilisé par l'onglet Chien)
+  Views.goTreatmentsTab = (t) => { tab = t; App.go('treatments'); };
 
   /* ---------- Poids ---------- */
   function weightChart(data) {

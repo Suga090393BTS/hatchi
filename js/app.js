@@ -6,7 +6,7 @@
   const { h, clear } = UI;
   const Views = window.Views || {};
 
-  const ROUTES = ['today', 'meals', 'shopping', 'treatments', 'journal', 'settings'];
+  const ROUTES = ['today', 'meals', 'shopping', 'treatments', 'journal', 'dog', 'settings'];
   let current = location.hash.replace('#', '') || 'today';
   if (!ROUTES.includes(current)) current = 'today';
 
