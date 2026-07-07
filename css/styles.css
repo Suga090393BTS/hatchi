@@ -83,12 +83,12 @@ input, select, textarea { font-family: inherit; font-size: 16px; }
 
 /* ---------- View / layout ---------- */
 .view { flex: 1; padding: 16px 16px 96px; }
-.section-title { font-size: 16px; font-weight: 800; letter-spacing: -.2px; text-transform: none; color: var(--ink); margin: 24px 4px 10px; }
+.section-title { font-size: 15px; font-weight: 800; letter-spacing: -.2px; text-transform: none; color: var(--ink-soft); margin: 18px 4px 9px; }
 .section-title:first-child { margin-top: 4px; }
 
 .card {
-  background: var(--card); border: 0;
-  border-radius: var(--radius); box-shadow: 0 1px 2px rgba(20,30,30,.04), 0 8px 28px rgba(20,30,30,.07);
+  background: var(--card); border: 1px solid var(--line);
+  border-radius: 18px; box-shadow: 0 1px 2px rgba(20,30,30,.04);
   padding: 16px; margin-bottom: 12px;
 }
 .card.flush { padding: 0; overflow: hidden; }
@@ -98,16 +98,21 @@ input, select, textarea { font-family: inherit; font-size: 16px; }
 .small { font-size: 13px; }
 .center { text-align: center; }
 
-/* Hero (today meals) */
+/* Hero (today meals) — les deux repas réunis dans UNE seule carte, séparés par un filet */
 .hero-meal { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 @media (max-width: 460px){ .hero-meal { grid-template-columns: 1fr; } }
+.card.meals { padding: 2px 16px; }
+.card.meals .meal-slot { box-shadow: none; border: 0; background: transparent; border-radius: 0; padding: 15px 2px; }
+.card.meals .meal-slot.done { background: transparent; }
+.card.meals .meal-slot.done .slot-label { color: var(--ok); }
+.meal-sep { height: 1px; background: var(--line); }
 .meal-slot {
-  border-radius: var(--radius); padding: 14px; border: 0;
-  background: var(--card); position: relative; box-shadow: 0 1px 2px rgba(20,30,30,.04), 0 8px 28px rgba(20,30,30,.07);
+  border-radius: 16px; padding: 14px; border: 0;
+  background: var(--card); position: relative;
 }
-.meal-slot .slot-label { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: var(--ink-soft); display:flex; align-items:center; gap:6px; }
-.meal-slot .slot-body { margin-top: 8px; font-size: 15px; }
-.meal-line { display: flex; justify-content: space-between; padding: 3px 0; border-bottom: 1px dashed var(--line); }
+.meal-slot .slot-label { font-size: 12.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .5px; color: var(--ink); display:flex; align-items:center; gap:7px; }
+.meal-slot .slot-body { margin-top: 10px; font-size: 15px; }
+.meal-line { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px dashed var(--line); }
 .meal-line:last-child { border-bottom: 0; }
 .meal-line .q { color: var(--ink-soft); font-variant-numeric: tabular-nums; white-space: nowrap; margin-left: 10px; }
 .meal-slot.done { background: var(--green-100); border-color: var(--green-100); }

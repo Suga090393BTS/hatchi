@@ -41,8 +41,8 @@
               ? [h('div.muted.small', { style: 'margin-bottom:4px' }, 'Suggestion (rotation) :')].concat(itemLines(planned))
               : h('div.muted.small', null, 'Note ce que tu donnes, même sans planification.')),
       fed
-        ? h('button.btn.sm.subtle', { style: 'margin-top:12px;width:100%', onClick: () => Views.openFedEditor(fed) }, 'Modifier ce qui a été donné')
-        : h('button.btn.sm', { style: 'margin-top:12px;width:100%', onClick: () => Views.openFedEditor(null, { date: iso, slot, presetItems }) }, '🍽 J\'ai donné…')
+        ? h('button.btn.sm.subtle', { style: 'margin-top:10px;width:100%', onClick: () => Views.openFedEditor(fed) }, 'Modifier ce qui a été donné')
+        : h('button.btn.sm.ghost', { style: 'margin-top:10px;width:100%', onClick: () => Views.openFedEditor(null, { date: iso, slot, presetItems }) }, '🍽 J\'ai donné…')
     ]);
   }
 
@@ -277,10 +277,11 @@
       const alert = lowStockAlert();
       if (alert) root.appendChild(alert);
 
-      // 2) Les repas du jour — l'action principale
+      // 2) Les repas du jour — l'action principale (matin + soir réunis dans une seule carte)
       root.appendChild(h('div.section-title', null, 'Repas du jour'));
-      root.appendChild(h('div.hero-meal', null, [
+      root.appendChild(h('div.card.meals', null, [
         mealSlot('matin', 'Matin', '🌅', iso),
+        h('div.meal-sep'),
         mealSlot('soir', 'Soir', '🌙', iso)
       ]));
       root.appendChild(rationCard(iso));
