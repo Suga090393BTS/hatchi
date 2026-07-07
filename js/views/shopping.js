@@ -92,7 +92,7 @@
           h('div.row-ic', null, catIcon(ing.category)),
           h('div.row-main', null, [
             h('strong', null, ing.name),
-            h('small', null, have ? ('déjà ' + qtyLabel(ing, have) + ' au congélo') : priceLabel(ing))
+            h('small', null, have ? ('déjà ' + qtyLabel(ing, have) + ' en stock') : priceLabel(ing))
           ]),
           h('div.row-end', null, [
             h('strong', null, qtyLabel(ing, qty) + ' à acheter'),
@@ -148,25 +148,23 @@
       root.appendChild(h('div.card', null, UI.emptyState('📦', 'Aucun article en stock', 'Appuie sur « J’ai fait des courses » pour enregistrer ce que tu as acheté.')));
     } else {
       root.appendChild(h('div.card.flush', null, ings.map((ing) => {
-        const qty = Store.stockOf(ing.id);
+        const cong = Store.congeloOf(ing.id), fri = Store.fridgeOf(ing.id);
         const days = Store.coverageDays(ing.id);
-        const piece = ing.unit === 'piece';
-        const step = piece ? 1 : 100;
         const cov = days === Infinity ? null : (days < 1 ? 'reste <1 j' : 'reste ~' + Math.floor(days) + ' j');
         const lowS = days !== Infinity && days < (Store.get().settings.stockAlertDays || 3);
+        const places = [cong ? '❄️ congélo ' + qtyLabel(ing, cong) : null, fri ? '🍽 frigo ' + qtyLabel(ing, fri) : null].filter(Boolean).join(' · ') || 'épuisé';
         return h('div.row', null, [
           h('div.row-ic', null, catIcon(ing.category)),
           h('div.row-main', null, [h('strong', null, ing.name),
-            h('small', null, [piece ? qty + ' u.' : grams(qty), cov ? '  ·  ' : '',
+            h('small', null, [places, cov ? '  ·  ' : '',
               cov ? h('span', { style: lowS ? 'color:var(--red);font-weight:700' : '' }, cov) : ''])]),
           h('div.row-end', null, h('div.inline', { style: 'gap:6px' }, [
-            h('button.btn.subtle.icon', { onClick: () => Store.adjustStock(ing.id, -step) }, '−'),
-            h('button.btn.subtle.icon', { onClick: () => Store.adjustStock(ing.id, step) }, '+'),
+            h('button.btn.subtle.icon', { title: 'Transférer congélo ⇄ frigo', onClick: () => openTransfer(ing) }, '⇄'),
             h('button.btn.ghost.icon', { onClick: () => editStock(ing) }, '✎')
           ]))
         ]);
       })));
-      root.appendChild(h('p.muted.small', { style: 'margin:10px 4px' }, 'Les boutons − / + ajustent par ' + '100 g (ou 1 pièce). Le stock se déduit tout seul quand un repas est marqué « donné ».'));
+      root.appendChild(h('p.muted.small', { style: 'margin:10px 4px' }, '⇄ pour sortir du congélo vers le frigo (décongélation) ou l\'inverse. Les repas « donnés » piochent d\'abord dans le frigo, puis au congélo.'));
     }
 
     // Historique des achats + dépenses du mois
@@ -190,18 +188,48 @@
   }
 
   function editStock(ing) {
-    let v = Store.stockOf(ing.id);
     const piece = ing.unit === 'piece';
-    let kg = piece ? v : +(v / 1000).toFixed(2);
+    const toUnit = (v) => piece ? v : +(v / 1000).toFixed(2);
+    const fromUnit = (v) => piece ? Math.round(v) : Math.round(v * 1000);
+    let c = toUnit(Store.congeloOf(ing.id));
+    let f = toUnit(Store.fridgeOf(ing.id));
     const body = h('div', null, [
-      h('div.field', null, [h('label', null, 'Stock de ' + ing.name + (piece ? ' (pièces)' : ' (kg)')),
-        h('input.input', { type: 'number', min: '0', step: piece ? '1' : '0.1', value: piece ? v : kg, onInput: (e) => { kg = +e.target.value || 0; } })]),
+      h('div.grid2', null, [
+        h('div.field', null, [h('label', null, '❄️ Congélo' + (piece ? ' (pièces)' : ' (kg)')),
+          h('input.input', { type: 'number', min: '0', step: piece ? '1' : '0.1', value: c, onInput: (e) => { c = +e.target.value || 0; } })]),
+        h('div.field', null, [h('label', null, '🍽 Frigo' + (piece ? ' (pièces)' : ' (kg)')),
+          h('input.input', { type: 'number', min: '0', step: piece ? '1' : '0.1', value: f, onInput: (e) => { f = +e.target.value || 0; } })])
+      ]),
       h('div.modal-actions', null, [
         h('button.btn.subtle', { onClick: () => UI.closeModal() }, 'Annuler'),
-        h('button.btn', { onClick: () => { Store.setStock(ing.id, piece ? Math.round(kg) : Math.round(kg * 1000)); UI.closeModal(); } }, 'Enregistrer')
+        h('button.btn', { onClick: () => { Store.setStock(ing.id, fromUnit(c)); Store.setStock(ing.id, fromUnit(f), 'frigo'); UI.closeModal(); } }, 'Enregistrer')
       ])
     ]);
     UI.modal({ title: 'Stock — ' + ing.name, body });
+  }
+
+  // Transfert congélo ⇄ frigo (décongélation, ou retour au congélo)
+  function openTransfer(ing) {
+    const piece = ing.unit === 'piece';
+    const cong = Store.congeloOf(ing.id), fri = Store.fridgeOf(ing.id);
+    let q = piece ? Math.min(1, Math.max(cong, fri)) : Math.min(500, Math.max(cong, fri));
+    const body = h('div', null, [
+      h('p.muted.small', { style: 'margin:0 4px 10px' }, '❄️ Congélo : ' + qtyLabel(ing, cong) + '   ·   🍽 Frigo : ' + qtyLabel(ing, fri)),
+      h('div.field', null, [h('label', null, 'Quantité à transférer' + (piece ? ' (pièces)' : ' (g)')),
+        h('input.input', { type: 'number', min: '0', step: piece ? '1' : '50', value: q, onInput: (e) => q = +e.target.value || 0 })]),
+      h('button.btn.block', { style: 'margin-bottom:8px', disabled: !cong, onClick: () => {
+        if (!(q > 0)) { UI.toast('Indique une quantité'); return; }
+        Store.transferStock(ing.id, q, true);
+        UI.closeModal(); UI.toast(qtyLabel(ing, Math.min(q, cong)) + ' sorti au frigo (décongélation) ✓');
+      } }, '❄️ Congélo → 🍽 Frigo (décongeler)'),
+      h('button.btn.subtle.block', { disabled: !fri, onClick: () => {
+        if (!(q > 0)) { UI.toast('Indique une quantité'); return; }
+        Store.transferStock(ing.id, q, false);
+        UI.closeModal(); UI.toast(qtyLabel(ing, Math.min(q, fri)) + ' remis au congélo ✓');
+      } }, '🍽 Frigo → ❄️ Congélo'),
+      h('button.btn.subtle.block', { style: 'margin-top:8px', onClick: () => UI.closeModal() }, 'Annuler')
+    ]);
+    UI.modal({ title: '⇄ ' + ing.name, body });
   }
 
   /* ---------- Détail d'un achat (voir / supprimer) ---------- */
