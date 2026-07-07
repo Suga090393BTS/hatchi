@@ -238,6 +238,49 @@ create policy "hatchi_all" on public.hatchi_state
     UI.modal({ title: mood ? 'Modifier l\'humeur' : 'Nouvelle humeur', body });
   }
 
+  /* ---------- Intitulés « choses à faire » (suggestions) ---------- */
+  function openTodoTextsList() {
+    const texts = Store.todoTexts();
+    const card = h('div.card.flush');
+    if (!texts.length) card.appendChild(h('div.empty', { style: 'padding:18px' }, 'Aucun intitulé — ils s\'ajoutent tout seuls quand tu crées une tâche.'));
+    texts.forEach((t) => {
+      card.appendChild(h('div.row', null, [
+        h('div.row-ic', null, '📝'),
+        h('div.row-main', null, h('strong', null, t)),
+        h('div.row-end', null, h('div.inline', { style: 'gap:4px' }, [
+          h('button.btn.ghost.icon', { onClick: () => { UI.closeModal(); setTimeout(() => openTodoTextEditor(t), 50); } }, '✎'),
+          h('button.delete-x', { onClick: async () => {
+            if (await UI.confirm('Retirer « ' + t + ' » des suggestions ?', { danger: true, ok: 'Retirer' })) {
+              Store.removeTodoText(t); UI.closeModal(); setTimeout(openTodoTextsList, 50);
+            }
+          } }, '✕')
+        ]))
+      ]));
+    });
+    const body = h('div', null, [
+      h('p.muted.small', { style: 'margin:0 0 10px' }, 'Chaque tâche créée sur « Aujourd\'hui » enregistre son intitulé ici — ils te sont resuggérés pour garder les mêmes libellés.'),
+      card,
+      h('button.btn.block', { style: 'margin-top:10px', onClick: () => { UI.closeModal(); setTimeout(() => openTodoTextEditor(null), 50); } }, '+ Ajouter un intitulé')
+    ]);
+    UI.modal({ title: '📝 Choses à faire', body });
+  }
+  function openTodoTextEditor(text) {
+    let name = text || '';
+    const body = h('div', null, [
+      h('div.field', null, [h('label', null, 'Intitulé'), h('input.input', { value: name, placeholder: 'Ex. Prendre RDV véto', onInput: (e) => name = e.target.value })]),
+      h('div.modal-actions', null, [
+        h('button.btn.subtle', { onClick: () => { UI.closeModal(); setTimeout(openTodoTextsList, 50); } }, 'Annuler'),
+        h('button.btn', { onClick: () => {
+          if (!name.trim()) { UI.toast('Écris l\'intitulé'); return; }
+          if (text) Store.renameTodoText(text, name);
+          else if (!Store.addTodoText(name)) { UI.toast('Cet intitulé existe déjà'); return; }
+          UI.closeModal(); setTimeout(openTodoTextsList, 50);
+        } }, 'Enregistrer')
+      ])
+    ]);
+    UI.modal({ title: text ? 'Modifier l\'intitulé' : 'Nouvel intitulé', body });
+  }
+
   /* ---------- Sync ---------- */
   function syncCard() {
     const s = Store.get().settings;
@@ -348,6 +391,15 @@ create policy "hatchi_all" on public.hatchi_state
         h('div.inline', { style: 'justify-content:space-between' }, [
           h('div', null, [h('strong', null, Store.moods().length + ' humeurs'), h('div.muted.small', null, 'Proposées dans la fiche du jour')]),
           h('button.btn.ghost.sm', { onClick: openMoodsList }, 'Gérer')
+        ])
+      ]));
+
+      // Intitulés des choses à faire
+      root.appendChild(h('div.section-title', null, 'Choses à faire (intitulés)'));
+      root.appendChild(h('div.card', null, [
+        h('div.inline', { style: 'justify-content:space-between' }, [
+          h('div', null, [h('strong', null, Store.todoTexts().length + ' intitulé' + (Store.todoTexts().length > 1 ? 's' : '')), h('div.muted.small', null, 'Suggestions à la saisie d\'une tâche')]),
+          h('button.btn.ghost.sm', { onClick: openTodoTextsList }, 'Gérer')
         ])
       ]));
 

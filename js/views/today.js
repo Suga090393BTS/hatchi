@@ -180,7 +180,8 @@
       ]));
     });
     if (!todos.length) card.appendChild(h('div.muted.small', { style: 'padding:2px 2px 4px' }, 'Ajoute ici ce que tu ne veux pas oublier (RDV véto, harnais à racheter…).'));
-    const inp = h('input.input', { placeholder: 'Ex. prendre RDV véto…', style: 'flex:1' });
+    card.appendChild(h('datalist', { id: 'hatchi-todos' }, Store.todoTexts().map((t) => h('option', { value: t }))));
+    const inp = h('input.input', { placeholder: 'Ex. prendre RDV véto…', style: 'flex:1', list: 'hatchi-todos' });
     const add = () => {
       if (!inp.value.trim()) { UI.toast('Écris la tâche d\'abord'); return; }
       Store.addTodo(inp.value);

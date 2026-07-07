@@ -173,6 +173,7 @@ Avion : cabine pour les petits gabarits (selon compagnie), sinon soute pressuris
       cuts: seedCuts(),          // morceaux suggérés (['cuisse', 'bavette', …])
       fed: [],                   // repas réellement donnés : [{id, date, slot, items:[{ingredientId, qty}]}]
       todos: [],                 // choses à faire : [{id, text, done, doneAt}]
+      todoTexts: [],             // intitulés déjà utilisés (suggestions, gérées dans Réglages)
       moods: seedMoods(),        // humeurs proposées dans le journal
       pharmacy: seedPharmacy(),  // fiches médicaments/produits : [{id, name, dose, actives, notes}]
       identity: { chipNumber: '', chipPhoto: '', identDate: '', identVet: '', prevOwner: '', prevVet: '' }, // puce, véto identificateur, ancien détenteur/véto
@@ -312,6 +313,7 @@ Avion : cabine pour les petits gabarits (selon compagnie), sinon soute pressuris
     if (!Array.isArray(s.fed)) s.fed = [];
     if (!Array.isArray(s.moods)) s.moods = seedMoods();
     if (!Array.isArray(s.todos)) s.todos = [];
+    if (!Array.isArray(s.todoTexts)) s.todoTexts = [];
     if (!Array.isArray(s.pharmacy)) s.pharmacy = [];
     s.identity = Object.assign({}, base.identity, s.identity || {});
     s.vetCurrent = Object.assign({}, base.vetCurrent, s.vetCurrent || {});
@@ -928,9 +930,27 @@ En cas d'urgence : appeler AVANT de partir (l'équipe prépare l'arrivée), tran
       text = (text || '').trim();
       if (!text) return null;
       const t = { id: uid(), text, done: false, doneAt: '' };
-      commit((s) => s.todos.push(t));
+      commit((s) => {
+        s.todos.push(t);
+        // l'intitulé rejoint les suggestions pour garder les mêmes libellés
+        if (!s.todoTexts.some((x) => x.toLowerCase() === text.toLowerCase())) s.todoTexts.push(text);
+      });
       return t;
     },
+    /* ---- Intitulés de tâches (suggestions, gérées dans Réglages) ---- */
+    todoTexts: () => state.todoTexts.slice(),
+    addTodoText(text) {
+      text = (text || '').trim();
+      if (!text || state.todoTexts.some((x) => x.toLowerCase() === text.toLowerCase())) return false;
+      commit((s) => s.todoTexts.push(text));
+      return true;
+    },
+    renameTodoText(oldText, newText) {
+      newText = (newText || '').trim();
+      if (!newText) return;
+      commit((s) => { const i = s.todoTexts.indexOf(oldText); if (i >= 0) s.todoTexts[i] = newText; });
+    },
+    removeTodoText(text) { commit((s) => { s.todoTexts = s.todoTexts.filter((x) => x !== text); }); },
     toggleTodo(id) {
       commit((s) => {
         const t = s.todos.find((x) => x.id === id);
