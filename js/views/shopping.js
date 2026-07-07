@@ -177,7 +177,7 @@
     root.appendChild(h('div.seg', { style: 'margin-bottom:12px' }, [['tout', 'Tout'], ['congelo', '❄️ Congélo'], ['frigo', '🍽 Frigo']].map(([v, l]) =>
       h('button', { class: stockLoc === v ? 'on' : '', onClick: () => { stockLoc = v; App.rerender(); } }, l))));
 
-    const used = Store.needs(Math.max(7, (Store.get().settings.cycleWeeks || 1) * 7));
+    const used = Store.needs(Store.planningDays());
     const allIngs = Store.get().ingredients.filter((i) =>
       stockLoc === 'congelo' ? Store.congeloOf(i.id) > 0 :
       stockLoc === 'frigo' ? Store.fridgeOf(i.id) > 0 :

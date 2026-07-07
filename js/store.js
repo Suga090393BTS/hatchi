@@ -144,10 +144,60 @@ Avion : cabine pour les petits gabarits (selon compagnie), sinon soute pressuris
     ];
   }
 
+  /* ---------- Multi-chiens ----------
+     Les données du chien AFFICHÉ vivent à la racine de l'état (comme avant) ;
+     s.dogs[] garde une entrée par chien, resynchronisée à chaque commit.
+     Changer de chien = sauvegarder la racine dans son entrée, charger l'autre. */
+  const DOG_FIELDS = ['treatments', 'journal', 'weights', 'fed', 'rotation', 'doses', 'identity', 'documents', 'vaccinations'];
+  const DOG_SETTINGS = ['dogName', 'dogBirthdate', 'rationPct', 'cycleWeeks', 'anchorMonday'];
+
+  function emptyDog(name) {
+    const d = { id: uid(), dogName: (name || '').trim() || 'Nouveau chien', dogBirthdate: '', rationPct: 2.5, cycleWeeks: 1, anchorMonday: mondayOf(todayISO()),
+      journal: {}, weights: [], fed: [], rotation: {}, doses: {}, documents: [], vaccinations: [],
+      identity: { chipNumber: '', chipPhoto: '', identDate: '', identVet: '', prevOwner: '', prevVet: '' } };
+    // rappels de base pour un nouveau chien (dates à renseigner)
+    d.treatments = seedTreatments().map((t) => Object.assign(t, { last: null, history: [] }));
+    return d;
+  }
+  function syncActiveDog(s) {
+    if (!Array.isArray(s.dogs)) return;
+    const d = s.dogs.find((x) => x.id === s.currentDogId);
+    if (!d) return;
+    DOG_FIELDS.forEach((k) => { d[k] = s[k]; });
+    DOG_SETTINGS.forEach((k) => { d[k] = s.settings[k]; });
+  }
+  const DOG_DEFAULTS = {
+    treatments: () => [], journal: () => ({}), weights: () => [], fed: () => [], rotation: () => ({}),
+    doses: () => ({}), documents: () => [], vaccinations: () => [],
+    identity: () => ({ chipNumber: '', chipPhoto: '', identDate: '', identVet: '', prevOwner: '', prevVet: '' })
+  };
+  function loadDog(s, id) {
+    const d = s.dogs.find((x) => x.id === id);
+    if (!d) return;
+    s.currentDogId = id;
+    DOG_FIELDS.forEach((k) => { s[k] = d[k] != null ? d[k] : DOG_DEFAULTS[k](); });
+    s.settings.dogName = d.dogName || 'Chien';
+    s.settings.dogBirthdate = d.dogBirthdate || '';
+    s.settings.rationPct = d.rationPct || 2.5;
+    s.settings.cycleWeeks = d.cycleWeeks || 1;
+    s.settings.anchorMonday = d.anchorMonday || mondayOf(todayISO());
+  }
+  // Vue « plan repas » d'un chien (actif = racine, sinon son entrée)
+  function dogPlan(s, d) {
+    const active = d.id === s.currentDogId;
+    return {
+      rotation: (active ? s.rotation : d.rotation) || {},
+      cycleWeeks: Math.max(1, (active ? s.settings.cycleWeeks : d.cycleWeeks) || 1),
+      anchor: (active ? s.settings.anchorMonday : d.anchorMonday) || mondayOf(todayISO())
+    };
+  }
+
   function emptyState() {
     return {
       version: 1,
       updatedAt: Date.now(),
+      dogs: [],                  // [{id, dogName, …données par chien}] — rempli par migrate()
+      currentDogId: '',
       settings: {
         dogName: 'Hatchi',
         dogBirthdate: '',
@@ -443,6 +493,16 @@ Avion : cabine pour les petits gabarits (selon compagnie), sinon soute pressuris
       }
       s.seeded.homemadeEggs = true;
     }
+    // Multi-chiens : première migration = le chien existant devient dogs[0] ; ensuite on recharge le chien affiché
+    if (!Array.isArray(s.dogs) || !s.dogs.length) {
+      const d = { id: uid() };
+      s.dogs = [d];
+      s.currentDogId = d.id;
+      syncActiveDog(s); // copie les données racine (l'historique d'Hatchi) dans son entrée
+    } else {
+      if (!s.dogs.find((x) => x.id === s.currentDogId)) s.currentDogId = s.dogs[0].id;
+      loadDog(s, s.currentDogId);
+    }
     // Fiche « Contacts vétérinaires » du carnet : ancien véto, urgences près de chez moi, ancien détenteur
     if (!s.seeded.contactsPage) {
       s.healthPages.unshift({
@@ -474,6 +534,7 @@ En cas d'urgence : appeler AVANT de partir (l'équipe prépare l'arrivée), tran
   function commit(mutator, opts) {
     opts = opts || {};
     mutator(state);
+    syncActiveDog(state); // l'entrée du chien affiché suit toujours la racine
     state.updatedAt = Date.now();
     persistLocal();
     emit();
@@ -597,6 +658,39 @@ En cas d'urgence : appeler AVANT de partir (l'équipe prépare l'arrivée), tran
 
     /* ---- Settings ---- */
     updateSettings(patch) { commit((s) => Object.assign(s.settings, patch)); },
+
+    /* ---- Chiens ---- */
+    dogsList() { return state.dogs.map((d) => ({ id: d.id, name: d.id === state.currentDogId ? state.settings.dogName : d.dogName, birthdate: d.id === state.currentDogId ? state.settings.dogBirthdate : d.dogBirthdate, active: d.id === state.currentDogId })); },
+    currentDogId: () => state.currentDogId,
+    setCurrentDog(id) {
+      if (id === state.currentDogId || !state.dogs.find((x) => x.id === id)) return;
+      commit((s) => { syncActiveDog(s); loadDog(s, id); });
+    },
+    addDog(name, birthdate) {
+      const d = emptyDog(name);
+      if (birthdate) d.dogBirthdate = birthdate;
+      commit((s) => { syncActiveDog(s); s.dogs.push(d); loadDog(s, d.id); });
+      return d.id;
+    },
+    updateDogMeta(id, patch) {
+      commit((s) => {
+        if (id === s.currentDogId) {
+          if (patch.name != null) s.settings.dogName = patch.name;
+          if (patch.birthdate != null) s.settings.dogBirthdate = patch.birthdate;
+        } else {
+          const d = s.dogs.find((x) => x.id === id);
+          if (d) { if (patch.name != null) d.dogName = patch.name; if (patch.birthdate != null) d.dogBirthdate = patch.birthdate; }
+        }
+      });
+    },
+    removeDog(id) {
+      if (state.dogs.length <= 1) return false;
+      commit((s) => {
+        s.dogs = s.dogs.filter((x) => x.id !== id);
+        if (s.currentDogId === id) loadDog(s, s.dogs[0].id);
+      });
+      return true;
+    },
 
     /* ---- Ingrédients ---- */
     ingredient: (id) => state.ingredients.find((i) => i.id === id),
@@ -817,19 +911,32 @@ En cas d'urgence : appeler AVANT de partir (l'équipe prépare l'arrivée), tran
       });
     },
     // Besoins agrégés sur une plage => {id: qty}
+    // Besoins agrégés sur une plage, TOUS chiens confondus (chacun avec son cycle)
     needs(range) {
       const totals = {};
-      listDates(range || 'week', {}).forEach((iso) => {
-        ['matin', 'soir'].forEach((slot) => this.itemsForDay(iso, slot).forEach((it) => {
-          totals[it.ingredientId] = (totals[it.ingredientId] || 0) + (it.qty || 0);
-        }));
+      const dates = listDates(range || 'week', {});
+      (state.dogs.length ? state.dogs : [{ id: state.currentDogId }]).forEach((d) => {
+        const plan = dogPlan(state, d);
+        dates.forEach((iso) => {
+          const weeksFromAnchor = Math.floor(daysBetween(plan.anchor, mondayOf(iso)) / 7);
+          const week = ((weeksFromAnchor % plan.cycleWeeks) + plan.cycleWeeks) % plan.cycleWeeks + 1;
+          const dayIdx = (new Date(iso + 'T00:00:00').getDay() + 6) % 7;
+          ['matin', 'soir'].forEach((slot) => (plan.rotation[`w${week}-${dayIdx}-${slot}`] || []).forEach((it) => {
+            if (it && typeof it === 'object' && it.ingredientId) totals[it.ingredientId] = (totals[it.ingredientId] || 0) + (it.qty || 0);
+          }));
+        });
       });
       return totals;
     },
+    // Horizon de planification : le plus long cycle parmi les chiens (en jours, min 7)
+    planningDays() {
+      const cw = Math.max(1, ...state.dogs.map((d) => (d.id === state.currentDogId ? state.settings.cycleWeeks : d.cycleWeeks) || 1));
+      return Math.max(7, cw * 7);
+    },
     restockFromNeeds(range) { const n = this.needs(range); commit((s) => { Object.keys(n).forEach((id) => { s.stock[id] = (s.stock[id] || 0) + n[id]; }); }); },
-    // Jours de couverture d'un ingrédient selon la conso moyenne du cycle
+    // Jours de couverture d'un ingrédient selon la conso moyenne (tous chiens)
     coverageDays(id) {
-      const cycleDays = Math.max(1, (state.settings.cycleWeeks || 1) * 7);
+      const cycleDays = this.planningDays();
       const cycleNeed = this.needs(cycleDays)[id] || 0; // sur la durée du cycle
       const perDay = cycleNeed / cycleDays;
       if (perDay <= 0) return Infinity;
@@ -1303,7 +1410,7 @@ En cas d'urgence : appeler AVANT de partir (l'équipe prépare l'arrivée), tran
         supabaseKey: state.settings.supabaseKey,
         spaceId: state.settings.spaceId
       };
-      state = emptyState();
+      state = migrate(emptyState()); // migrate crée le premier chien
       Object.assign(state.settings, conn);
       persistLocal(); emit(); schedulePush();
     }

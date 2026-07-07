@@ -321,13 +321,18 @@ create policy "hatchi_all" on public.hatchi_state
     render(root) {
       const s = Store.get().settings;
 
-      // Profil
-      root.appendChild(h('div.section-title', null, 'Profil'));
+      // Mes chiens (le reste de la page concerne le chien affiché)
+      root.appendChild(h('div.section-title', null, 'Mes chiens'));
+      root.appendChild(dogsCard());
+
+      // Profil du chien affiché
+      root.appendChild(h('div.section-title', null, 'Profil de ' + (s.dogName || 'mon chien')));
       root.appendChild(h('div.card', null, [
         h('div.grid2', null, [
           h('div.field', null, [h('label', null, 'Nom du chien'), h('input.input', { value: s.dogName || '', onChange: (e) => Store.updateSettings({ dogName: e.target.value }) })]),
           h('div.field', null, [h('label', null, 'Date de naissance'), h('input.input', { type: 'date', value: s.dogBirthdate || '', onChange: (e) => Store.updateSettings({ dogBirthdate: e.target.value }) })])
-        ])
+        ]),
+        h('p.muted.small', { style: 'margin:0 4px' }, 'Toute l\'app (repas, soins, journal, identité…) affiche le chien sélectionné — change de chien en touchant son nom en haut de l\'écran.')
       ]));
 
       // Personnes
@@ -335,7 +340,7 @@ create policy "hatchi_all" on public.hatchi_state
       root.appendChild(peopleCard());
 
       // Rotation
-      root.appendChild(h('div.section-title', null, 'Rotation des repas'));
+      root.appendChild(h('div.section-title', null, 'Rotation des repas — ' + (s.dogName || 'chien affiché')));
       root.appendChild(h('div.card', null, [
         h('div.grid2', null, [
           h('div.field', null, [h('label', null, 'Lundi de départ du cycle'),
@@ -443,6 +448,50 @@ create policy "hatchi_all" on public.hatchi_state
       root.appendChild(footer);
     }
   };
+
+  /* ---------- Mes chiens ---------- */
+  function dogsCard() {
+    const dogs = Store.dogsList();
+    const card = h('div.card.flush');
+    dogs.forEach((d) => {
+      card.appendChild(h('div.row', null, [
+        h('div.row-ic', null, '🐕'),
+        h('div.row-main', { onClick: () => { if (!d.active) { Store.setCurrentDog(d.id); UI.toast('🐾 ' + d.name); } } }, [
+          h('strong', null, d.name),
+          h('small', null, [d.active ? 'Affiché actuellement' : 'Toucher pour afficher', d.birthdate ? ' · né(e) le ' + UI.fmtShortYear(d.birthdate) : ''].join(''))
+        ]),
+        h('div.row-end', null, h('div.inline', { style: 'gap:4px' }, [
+          d.active ? h('span.badge.ok', null, '✓') : null,
+          h('button.btn.ghost.icon', { onClick: () => openDogEditor(d) }, '✎')
+        ]))
+      ]));
+    });
+    return h('div', null, [card, h('button.btn.block', { style: 'margin-top:8px', onClick: () => openDogEditor(null) }, '+ Ajouter un chien')]);
+  }
+  function openDogEditor(d) {
+    const isNew = !d;
+    let name = d ? d.name : '', birth = d ? d.birthdate : '';
+    const body = h('div', null, [
+      h('div.field', null, [h('label', null, 'Nom du chien'), h('input.input', { value: name, placeholder: 'Ex. Nala', onInput: (e) => name = e.target.value })]),
+      h('div.field', null, [h('label', null, 'Date de naissance'), h('input.input', { type: 'date', value: birth, onChange: (e) => birth = e.target.value })]),
+      isNew ? h('p.muted.small', { style: 'margin:0 4px 10px' }, 'Le nouveau chien démarre avec ses propres soins, journal, poids, repas et identité — le stock, les courses et la pharmacie restent communs à la maison.') : null,
+      h('div.modal-actions', null, [
+        !isNew && Store.dogsList().length > 1 ? h('button.btn.danger', { onClick: async () => {
+          if (await UI.confirm('Supprimer ' + d.name + ' et TOUTES ses données (journal, vaccins, poids…) ? Irréversible.', { danger: true, ok: 'Supprimer' })) {
+            Store.removeDog(d.id); UI.closeModal(); UI.toast(d.name + ' supprimé');
+          }
+        } }, '🗑') : h('button.btn.subtle', { onClick: () => UI.closeModal() }, 'Annuler'),
+        h('button.btn', { style: 'flex:2', onClick: () => {
+          if (!name.trim()) { UI.toast('Donne un nom'); return; }
+          if (isNew) { Store.addDog(name, birth); UI.toast('🐾 Bienvenue ' + name.trim() + ' !'); }
+          else Store.updateDogMeta(d.id, { name: name.trim(), birthdate: birth });
+          UI.closeModal();
+        } }, 'Enregistrer')
+      ])
+    ]);
+    UI.modal({ title: isNew ? '🐾 Nouveau chien' : 'Modifier ' + d.name, body });
+  }
+  Views.openDogEditor = openDogEditor; // utilisé par le sélecteur du bandeau
 
   function peopleCard() {
     const people = Store.get().people;
