@@ -232,6 +232,7 @@
 
   Views.treatments = {
     render(root) {
+      root.appendChild(h('button.linkbtn', { style: 'margin:0 0 8px', onClick: () => App.go('dog') }, '‹ ' + (Store.get().settings.dogName || 'Chien')));
       root.appendChild(h('div.seg', { style: 'margin-bottom:14px;flex-wrap:wrap;justify-content:center' }, [
         ['soins', '💊 Soins'], ['vaccins', '💉 Vaccins'], ['identite', '🪪 Identité'], ['carnet', '📖 Carnet'], ['poids', '⚖️ Poids']
       ].map(([v, l]) => h('button', { class: tab === v ? 'on' : '', onClick: () => { tab = v; App.rerender(); } }, l))));

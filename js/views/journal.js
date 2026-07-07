@@ -436,6 +436,7 @@ ${s.settings.dogBirthdate ? `<p class="muted">Né(e) le ${UI.fmtShortYear(s.sett
 
   Views.journal = {
     render(root) {
+      root.appendChild(h('button.linkbtn', { style: 'margin:0 0 8px', onClick: () => App.go('dog') }, '‹ ' + (Store.get().settings.dogName || 'Chien')));
       root.appendChild(h('div.seg', { style: 'margin-bottom:14px' }, [
         h('button', { class: mode === 'mois' ? 'on' : '', onClick: () => { mode = 'mois'; App.rerender(); } }, '📅 Mois'),
         h('button', { class: mode === 'liste' ? 'on' : '', onClick: () => { mode = 'liste'; App.rerender(); } }, '📋 Liste'),

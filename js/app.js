@@ -25,8 +25,9 @@
     }
     // barre des chiens : masquée sur Courses (stock et achats communs à tous les chiens)
     document.getElementById('dogbar').style.display = current === 'shopping' ? 'none' : '';
-    // active tab
-    [...tabbar.children].forEach((b) => b.classList.toggle('active', b.dataset.route === current));
+    // active tab (Soins/Journal sont ouverts depuis Chien → on garde Chien en surbrillance)
+    const activeRoute = (current === 'treatments' || current === 'journal') ? 'dog' : current;
+    [...tabbar.children].forEach((b) => b.classList.toggle('active', b.dataset.route === activeRoute));
     viewEl.scrollTop = 0;
     window.scrollTo(0, 0);
   }
