@@ -223,8 +223,8 @@
       root.appendChild(h('p.muted.small', { style: 'margin:10px 4px' }, '⇄ pour sortir du congélo vers le frigo (décongélation) ou l\'inverse. Les repas « donnés » piochent d\'abord dans le frigo, puis au congélo.'));
     }
 
-    // Historique des achats + dépenses du mois
-    const purchases = Store.purchasesSorted();
+    // Historique des achats + dépenses du mois — seulement en vue « Tout »
+    const purchases = stockLoc === 'tout' ? Store.purchasesSorted() : [];
     if (purchases.length) {
       const spent = Store.spentInMonth();
       root.appendChild(h('div.section-title', null, 'Mes courses récentes'));
