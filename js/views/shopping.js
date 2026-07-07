@@ -10,6 +10,7 @@
   let range = 'week';   // 'week' | 'month'
   let view = 'acheter'; // 'acheter' | 'stock'
   let stockCat = 'tout'; // filtre catégorie du stock : 'tout' | 'viande' | 'legume'…
+  let stockLoc = 'tout'; // inventaire affiché : 'tout' | 'congelo' | 'frigo'
 
   const CAT_ORDER = ['viande', 'abats', 'os', 'entier', 'oeuf', 'legume', 'autre'];
   const CAT_LABEL = { viande: '🥩 Viandes', abats: '🫀 Abats', os: '🦴 Os', entier: '🐔 Animaux entiers', oeuf: '🥚 Œufs', legume: '🥕 Légumes', autre: '📦 Autre' };
@@ -172,8 +173,15 @@
 
     root.appendChild(h('button.btn.block', { style: 'margin-bottom:12px', onClick: () => openPurchaseModal() }, '🛒 J’ai fait des courses'));
 
+    // Inventaire : tout, ou seulement le congélo / le frigo
+    root.appendChild(h('div.seg', { style: 'margin-bottom:12px' }, [['tout', 'Tout'], ['congelo', '❄️ Congélo'], ['frigo', '🍽 Frigo']].map(([v, l]) =>
+      h('button', { class: stockLoc === v ? 'on' : '', onClick: () => { stockLoc = v; App.rerender(); } }, l))));
+
     const used = Store.needs(Math.max(7, (Store.get().settings.cycleWeeks || 1) * 7));
-    const allIngs = Store.get().ingredients.filter((i) => Store.stockOf(i.id) > 0 || used[i.id]);
+    const allIngs = Store.get().ingredients.filter((i) =>
+      stockLoc === 'congelo' ? Store.congeloOf(i.id) > 0 :
+      stockLoc === 'frigo' ? Store.fridgeOf(i.id) > 0 :
+      (Store.stockOf(i.id) > 0 || used[i.id]));
 
     // Onglets de filtre par catégorie : je touche « Légumes » et je ne vois que les légumes
     const presentCats = CAT_ORDER.filter((cat) => allIngs.some((i) => i.category === cat));
@@ -188,14 +196,19 @@
     const ings = stockCat === 'tout' ? allIngs : allIngs.filter((i) => i.category === stockCat);
 
     if (!ings.length) {
-      root.appendChild(h('div.card', null, UI.emptyState('📦', 'Aucun article en stock', 'Appuie sur « J’ai fait des courses » pour enregistrer ce que tu as acheté.')));
+      root.appendChild(h('div.card', null, UI.emptyState(
+        stockLoc === 'frigo' ? '🍽' : stockLoc === 'congelo' ? '❄️' : '📦',
+        stockLoc === 'frigo' ? 'Rien au frigo' : stockLoc === 'congelo' ? 'Rien au congélo' : 'Aucun article en stock',
+        stockLoc === 'frigo' ? 'Utilise ⇄ sur un article du congélo pour sortir de quoi décongeler.' : 'Appuie sur « J’ai fait des courses » pour enregistrer ce que tu as acheté.')));
     } else {
       root.appendChild(h('div.card.flush', null, ings.map((ing) => {
         const cong = Store.congeloOf(ing.id), fri = Store.fridgeOf(ing.id);
         const days = Store.coverageDays(ing.id);
         const cov = days === Infinity ? null : (days < 1 ? 'reste <1 j' : 'reste ~' + Math.floor(days) + ' j');
         const lowS = days !== Infinity && days < (Store.get().settings.stockAlertDays || 3);
-        const places = [cong ? '❄️ congélo ' + qtyLabel(ing, cong) : null, fri ? '🍽 frigo ' + qtyLabel(ing, fri) : null].filter(Boolean).join(' · ') || 'épuisé';
+        const places = stockLoc === 'congelo' ? '❄️ ' + qtyLabel(ing, cong)
+          : stockLoc === 'frigo' ? '🍽 ' + qtyLabel(ing, fri)
+          : [cong ? '❄️ congélo ' + qtyLabel(ing, cong) : null, fri ? '🍽 frigo ' + qtyLabel(ing, fri) : null].filter(Boolean).join(' · ') || 'épuisé';
         return h('div.row', null, [
           h('div.row-ic', null, catIcon(ing.category)),
           h('div.row-main', null, [h('strong', null, ing.name),
