@@ -23,6 +23,8 @@
     } else {
       viewEl.appendChild(h('div.empty', null, 'Vue indisponible'));
     }
+    // barre des chiens : masquée sur Courses (stock et achats communs à tous les chiens)
+    document.getElementById('dogbar').style.display = current === 'shopping' ? 'none' : '';
     // active tab
     [...tabbar.children].forEach((b) => b.classList.toggle('active', b.dataset.route === current));
     viewEl.scrollTop = 0;
