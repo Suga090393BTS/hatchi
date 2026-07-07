@@ -48,10 +48,20 @@
 
   /* ---- Header bindings ---- */
   function refreshHeader() {
-    // le bandeau vert garde le nom de l'appli ; les chiens ont leur barre dédiée dessous
+    // le bandeau garde le nom de l'appli ; les chiens ont leur barre dédiée dessous
     document.getElementById('dogNameLabel').textContent = 'Hatchi';
     document.getElementById('dateLabel').textContent = UI.fmtLong(Store.todayISO());
+    applyTheme();
     renderDogBar();
+  }
+
+  /* ---- Thème d'apparence (Réglages → Apparence) ---- */
+  function applyTheme() {
+    const t = Store.get().settings.theme || 'foret';
+    if (document.documentElement.dataset.theme !== t) document.documentElement.dataset.theme = t;
+    const col = getComputedStyle(document.documentElement).getPropertyValue('--green').trim();
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta && col) meta.content = col;
   }
 
   /* ---- Barre des chiens : un bouton par chien (emoji personnalisable) ---- */
@@ -59,10 +69,16 @@
     const bar = document.getElementById('dogbar');
     clear(bar);
     Store.dogsList().forEach((d) => {
+      // couleur du chien : fond du bouton quand il est affiché, pastille sinon
+      const style = d.color ? (d.active ? `background:${d.color};border-color:${d.color}` : `border-color:${d.color}`) : '';
       bar.appendChild(h('button', {
-        class: 'chip' + (d.active ? ' on' : ''),
+        class: 'chip' + (d.active ? ' on' : ''), style,
         onClick: () => { if (!d.active) { Store.setCurrentDog(d.id); UI.toast(d.emoji + ' ' + d.name); } }
-      }, [h('span', null, d.emoji), h('span', null, d.name + (d.sex === 'femelle' ? ' ♀' : d.sex === 'male' ? ' ♂' : ''))]));
+      }, [
+        d.color && !d.active ? h('span', { style: `width:9px;height:9px;border-radius:50%;background:${d.color};display:inline-block;flex:none` }) : null,
+        h('span', null, d.emoji),
+        h('span', null, d.name + (d.sex === 'femelle' ? ' ♀' : d.sex === 'male' ? ' ♂' : ''))
+      ]));
     });
     bar.appendChild(h('button.chip', { title: 'Ajouter un chien', onClick: () => Views.openDogEditor(null) }, '＋'));
   }

@@ -343,6 +343,8 @@ create policy "hatchi_all" on public.hatchi_state
           h('div.field', null, [h('label', null, 'Emoji du bouton'),
             h('input.input', { value: s.dogEmoji || '🐕', placeholder: '🐕', onChange: (e) => Store.updateSettings({ dogEmoji: (e.target.value || '🐕').trim() }) })])
         ]),
+        h('div.field', null, [h('label', null, 'Couleur du chien (son bouton et sa pastille)'),
+          colorSwatches(s.dogColor || '', (c) => Store.updateSettings({ dogColor: c }))]),
         h('p.muted.small', { style: 'margin:0 4px' }, 'Toute l\'app (repas, soins, journal, identité…) affiche le chien sélectionné — change de chien en touchant son nom en haut de l\'écran.')
       ]));
 
@@ -397,6 +399,16 @@ create policy "hatchi_all" on public.hatchi_state
           h('div', null, [h('strong', null, Store.cuts().length + ' morceaux'), h('div.muted.small', null, 'Suggestions à la saisie d’un achat')]),
           h('button.btn.ghost.sm', { onClick: openCutsList }, 'Gérer')
         ])
+      ]));
+
+      // Apparence
+      root.appendChild(h('div.section-title', null, 'Apparence'));
+      root.appendChild(h('div.card', null, [
+        h('p.muted.small', { style: 'margin:0 0 10px' }, 'Choisis les couleurs de l\'app (appliqué sur tous les écrans).'),
+        h('div.chip-row', null, THEMES.map(([v, l, c]) => h('button', {
+          class: 'chip' + ((s.theme || 'foret') === v ? ' on' : ''),
+          onClick: () => { Store.updateSettings({ theme: v }); UI.toast(l); }
+        }, [h('span', { style: `width:11px;height:11px;border-radius:50%;background:${c};display:inline-block;flex:none;border:1.5px solid rgba(255,255,255,.6)` }), h('span', null, l)])))
       ]));
 
       // Pharmacie
@@ -470,6 +482,17 @@ create policy "hatchi_all" on public.hatchi_state
   /* ---------- Mes chiens ---------- */
   const DOG_SIZES = [['petit', 'Petit (< 10 kg)'], ['moyen', 'Moyen (10-25 kg)'], ['grand', 'Grand (25-45 kg)'], ['geant', 'Géant (> 45 kg)']];
   const DOG_SEXES = [['', '—'], ['femelle', '♀ Femelle'], ['male', '♂ Mâle']];
+  const DOG_COLORS = ['', '#e0913a', '#c8553d', '#c2527b', '#7857c0', '#3a6ea5', '#0e9aa7', '#3f9d6b', '#8a6d3b'];
+  const THEMES = [['foret', '🌿 Forêt', '#1f6f5c'], ['ocean', '🌊 Océan', '#2f6db5'], ['lilas', '💜 Lilas', '#7857c0'], ['terracotta', '🏺 Terracotta', '#c15f43']];
+
+  // Nuancier : rond par couleur, anneau sur la sélection
+  function colorSwatches(current, onPick) {
+    return h('div.chip-row', null, DOG_COLORS.map((c) => h('button', {
+      title: c ? c : 'Aucune couleur',
+      style: 'width:34px;height:34px;border-radius:50%;padding:0;font-size:13px;border:3px solid ' + (current === c ? 'var(--ink)' : 'var(--line)') + ';background:' + (c || 'var(--card)'),
+      onClick: () => onPick(c)
+    }, c ? '' : '✕')));
+  }
   function dogsCard() {
     const dogs = Store.dogsList();
     const card = h('div.card.flush');
@@ -490,7 +513,7 @@ create policy "hatchi_all" on public.hatchi_state
   }
   function openDogEditor(d) {
     const isNew = !d;
-    let name = d ? d.name : '', birth = d ? d.birthdate : '', breed = d ? d.breed : '', size = d ? d.size : 'moyen', sex = d ? d.sex : '', emoji = d ? d.emoji : '🐕';
+    let name = d ? d.name : '', birth = d ? d.birthdate : '', breed = d ? d.breed : '', size = d ? d.size : 'moyen', sex = d ? d.sex : '', emoji = d ? d.emoji : '🐕', color = d ? d.color : '';
     const body = h('div', null, [
       h('div.field', null, [h('label', null, 'Nom du chien'), h('input.input', { value: name, placeholder: 'Ex. Nala', onInput: (e) => name = e.target.value })]),
       h('div.field', null, [h('label', null, 'Date de naissance'), h('input.input', { type: 'date', value: birth, onChange: (e) => birth = e.target.value })]),
@@ -504,6 +527,12 @@ create policy "hatchi_all" on public.hatchi_state
           h('select.input', { onChange: (e) => sex = e.target.value }, DOG_SEXES.map(([v, l]) => h('option', { value: v, selected: v === sex }, l)))]),
         h('div.field', null, [h('label', null, 'Emoji du bouton'), h('input.input', { value: emoji, placeholder: '🐕', onInput: (e) => emoji = e.target.value })])
       ]),
+      (() => {
+        const wrapCol = h('div.field');
+        const render = () => { UI.clear(wrapCol); wrapCol.appendChild(h('label', null, 'Couleur du chien')); wrapCol.appendChild(colorSwatches(color, (c) => { color = c; render(); })); };
+        render();
+        return wrapCol;
+      })(),
       isNew ? h('p.muted.small', { style: 'margin:0 4px 10px' }, 'Le nouveau chien démarre avec ses propres soins, journal, poids, repas et identité — le stock, les courses et la pharmacie restent communs à la maison.') : null,
       h('div.modal-actions', null, [
         !isNew && Store.dogsList().length > 1 ? h('button.btn.danger', { onClick: async () => {
@@ -515,9 +544,9 @@ create policy "hatchi_all" on public.hatchi_state
           if (!name.trim()) { UI.toast('Donne un nom'); return; }
           if (isNew) {
             const id = Store.addDog(name, birth);
-            Store.updateDogMeta(id, { breed: breed.trim(), size, sex, emoji: (emoji || '🐕').trim() });
+            Store.updateDogMeta(id, { breed: breed.trim(), size, sex, emoji: (emoji || '🐕').trim(), color });
             UI.toast('🐾 Bienvenue ' + name.trim() + ' !');
-          } else Store.updateDogMeta(d.id, { name: name.trim(), birthdate: birth, breed: breed.trim(), size, sex, emoji: (emoji || '🐕').trim() });
+          } else Store.updateDogMeta(d.id, { name: name.trim(), birthdate: birth, breed: breed.trim(), size, sex, emoji: (emoji || '🐕').trim(), color });
           UI.closeModal();
         } }, 'Enregistrer')
       ])

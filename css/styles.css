@@ -26,6 +26,20 @@
   font-synthesis: none;
 }
 
+/* ---------- Thèmes (Réglages → Apparence) ---------- */
+html[data-theme="ocean"] {
+  --green: #2f6db5; --green-700: #24558d; --green-100: #e3edf8;
+  --sand: #edf2f8; --bg: #f6f9fc; --ink: #22303e; --ink-soft: #5b6b7a; --line: #dfe7ef;
+}
+html[data-theme="lilas"] {
+  --green: #7857c0; --green-700: #5f44a0; --green-100: #eee9f9;
+  --sand: #f1edf8; --bg: #faf8fd; --ink: #2e2743; --ink-soft: #6d6484; --line: #e6dff2;
+}
+html[data-theme="terracotta"] {
+  --green: #c15f43; --green-700: #9d4a33; --green-100: #f9e7e0;
+  --sand: #f7efe9; --bg: #fcf8f5; --ink: #3a2c26; --ink-soft: #7c685e; --line: #eee0d6;
+}
+
 * { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; }
 /* Empêche les navigateurs mobiles de gonfler/réduire les textes à leur guise (tailles incohérentes) */
