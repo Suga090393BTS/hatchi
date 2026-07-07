@@ -149,10 +149,10 @@ Avion : cabine pour les petits gabarits (selon compagnie), sinon soute pressuris
      s.dogs[] garde une entrée par chien, resynchronisée à chaque commit.
      Changer de chien = sauvegarder la racine dans son entrée, charger l'autre. */
   const DOG_FIELDS = ['treatments', 'journal', 'weights', 'fed', 'rotation', 'doses', 'identity', 'documents', 'vaccinations'];
-  const DOG_SETTINGS = ['dogName', 'dogBirthdate', 'rationPct', 'cycleWeeks', 'anchorMonday'];
+  const DOG_SETTINGS = ['dogName', 'dogBirthdate', 'dogBreed', 'dogSize', 'rationPct', 'cycleWeeks', 'anchorMonday'];
 
   function emptyDog(name) {
-    const d = { id: uid(), dogName: (name || '').trim() || 'Nouveau chien', dogBirthdate: '', rationPct: 2.5, cycleWeeks: 1, anchorMonday: mondayOf(todayISO()),
+    const d = { id: uid(), dogName: (name || '').trim() || 'Nouveau chien', dogBirthdate: '', dogBreed: '', dogSize: 'moyen', rationPct: 2.5, cycleWeeks: 1, anchorMonday: mondayOf(todayISO()),
       journal: {}, weights: [], fed: [], rotation: {}, doses: {}, documents: [], vaccinations: [],
       identity: { chipNumber: '', chipPhoto: '', identDate: '', identVet: '', prevOwner: '', prevVet: '' } };
     // rappels de base pour un nouveau chien (dates à renseigner)
@@ -178,6 +178,8 @@ Avion : cabine pour les petits gabarits (selon compagnie), sinon soute pressuris
     DOG_FIELDS.forEach((k) => { s[k] = d[k] != null ? d[k] : DOG_DEFAULTS[k](); });
     s.settings.dogName = d.dogName || 'Chien';
     s.settings.dogBirthdate = d.dogBirthdate || '';
+    s.settings.dogBreed = d.dogBreed || '';
+    s.settings.dogSize = d.dogSize || 'moyen';
     s.settings.rationPct = d.rationPct || 2.5;
     s.settings.cycleWeeks = d.cycleWeeks || 1;
     s.settings.anchorMonday = d.anchorMonday || mondayOf(todayISO());
@@ -660,7 +662,25 @@ En cas d'urgence : appeler AVANT de partir (l'équipe prépare l'arrivée), tran
     updateSettings(patch) { commit((s) => Object.assign(s.settings, patch)); },
 
     /* ---- Chiens ---- */
-    dogsList() { return state.dogs.map((d) => ({ id: d.id, name: d.id === state.currentDogId ? state.settings.dogName : d.dogName, birthdate: d.id === state.currentDogId ? state.settings.dogBirthdate : d.dogBirthdate, active: d.id === state.currentDogId })); },
+    dogsList() {
+      return state.dogs.map((d) => {
+        const active = d.id === state.currentDogId;
+        const src = active ? state.settings : d;
+        return { id: d.id, active, name: active ? src.dogName : d.dogName, birthdate: src.dogBirthdate, breed: src.dogBreed || '', size: src.dogSize || 'moyen' };
+      });
+    },
+    // Libellé du gabarit + % de ration suggéré selon gabarit et âge (chiot = plus)
+    sizeLabel(size) { return ({ petit: 'Petit (< 10 kg)', moyen: 'Moyen (10-25 kg)', grand: 'Grand (25-45 kg)', geant: 'Géant (> 45 kg)' })[size] || 'Moyen'; },
+    suggestedRationPct() {
+      const s = state.settings;
+      if (s.dogBirthdate) {
+        const months = Math.max(0, Math.round(daysBetween(s.dogBirthdate, todayISO()) / 30.4));
+        if (months < 4) return 6;
+        if (months < 8) return 4;
+        if (months < 12) return 3;
+      }
+      return ({ petit: 3, moyen: 2.5, grand: 2.2, geant: 1.8 })[s.dogSize || 'moyen'] || 2.5;
+    },
     currentDogId: () => state.currentDogId,
     setCurrentDog(id) {
       if (id === state.currentDogId || !state.dogs.find((x) => x.id === id)) return;
@@ -674,12 +694,12 @@ En cas d'urgence : appeler AVANT de partir (l'équipe prépare l'arrivée), tran
     },
     updateDogMeta(id, patch) {
       commit((s) => {
+        const map = { name: 'dogName', birthdate: 'dogBirthdate', breed: 'dogBreed', size: 'dogSize' };
         if (id === s.currentDogId) {
-          if (patch.name != null) s.settings.dogName = patch.name;
-          if (patch.birthdate != null) s.settings.dogBirthdate = patch.birthdate;
+          Object.keys(map).forEach((k) => { if (patch[k] != null) s.settings[map[k]] = patch[k]; });
         } else {
           const d = s.dogs.find((x) => x.id === id);
-          if (d) { if (patch.name != null) d.dogName = patch.name; if (patch.birthdate != null) d.dogBirthdate = patch.birthdate; }
+          if (d) Object.keys(map).forEach((k) => { if (patch[k] != null) d[map[k]] = patch[k]; });
         }
       });
     },

@@ -61,7 +61,7 @@
         onClick: () => { UI.closeModal(); if (!d.active) { Store.setCurrentDog(d.id); UI.toast('🐾 ' + d.name); } }
       }, [
         h('div.row-ic', null, '🐕'),
-        h('div.row-main', null, [h('strong', null, d.name), h('small', null, d.birthdate ? 'Né(e) le ' + UI.fmtShortYear(d.birthdate) : '')]),
+        h('div.row-main', null, [h('strong', null, d.name), h('small', null, [d.breed, d.birthdate ? 'né(e) le ' + UI.fmtShortYear(d.birthdate) : ''].filter(Boolean).join(' · '))]),
         h('div.row-end', null, d.active ? h('span.badge.ok', null, '✓ affiché') : h('span.muted', null, '›'))
       ]))),
       h('button.btn.block', { style: 'margin-top:10px', onClick: () => { UI.closeModal(); setTimeout(() => Views.openDogEditor(null), 50); } }, '+ Ajouter un chien')

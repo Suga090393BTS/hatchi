@@ -332,6 +332,11 @@ create policy "hatchi_all" on public.hatchi_state
           h('div.field', null, [h('label', null, 'Nom du chien'), h('input.input', { value: s.dogName || '', onChange: (e) => Store.updateSettings({ dogName: e.target.value }) })]),
           h('div.field', null, [h('label', null, 'Date de naissance'), h('input.input', { type: 'date', value: s.dogBirthdate || '', onChange: (e) => Store.updateSettings({ dogBirthdate: e.target.value }) })])
         ]),
+        h('div.grid2', null, [
+          h('div.field', null, [h('label', null, 'Race'), h('input.input', { value: s.dogBreed || '', placeholder: 'Ex. Berger australien', onChange: (e) => Store.updateSettings({ dogBreed: e.target.value }) })]),
+          h('div.field', null, [h('label', null, 'Gabarit'),
+            h('select.input', { onChange: (e) => Store.updateSettings({ dogSize: e.target.value }) }, DOG_SIZES.map(([v, l]) => h('option', { value: v, selected: v === (s.dogSize || 'moyen') }, l)))])
+        ]),
         h('p.muted.small', { style: 'margin:0 4px' }, 'Toute l\'app (repas, soins, journal, identité…) affiche le chien sélectionné — change de chien en touchant son nom en haut de l\'écran.')
       ]));
 
@@ -360,7 +365,14 @@ create policy "hatchi_all" on public.hatchi_state
           h('div.field', null, [h('label', null, 'Alerte stock (jours)'),
             h('input.input', { type: 'number', min: '1', value: s.stockAlertDays || 3, onChange: (e) => Store.updateSettings({ stockAlertDays: +e.target.value || 3 }) })])
         ]),
-        h('p.muted.small', { style: 'margin:0 4px' }, 'Chien adulte : ~2–3 %. Chiot ou très actif : plus. La ration s’affiche dans « Aujourd’hui ».')
+        (() => {
+          const sug = Store.suggestedRationPct();
+          const cur = s.rationPct || 2.5;
+          return h('div.inline', { style: 'justify-content:space-between;margin:0 4px;gap:8px' }, [
+            h('p.muted.small', { style: 'margin:0;flex:1' }, '💡 Suggestion pour un ' + Store.sizeLabel(s.dogSize).toLowerCase() + (sug > 3 ? ' encore chiot' : '') + ' : ~' + sug + ' % (à valider avec le véto).'),
+            sug !== cur ? h('button.btn.ghost.sm', { onClick: () => { Store.updateSettings({ rationPct: sug }); UI.toast('Ration réglée sur ' + sug + ' %'); } }, 'Appliquer') : null
+          ]);
+        })()
       ]));
 
       // Ingrédients
@@ -450,6 +462,7 @@ create policy "hatchi_all" on public.hatchi_state
   };
 
   /* ---------- Mes chiens ---------- */
+  const DOG_SIZES = [['petit', 'Petit (< 10 kg)'], ['moyen', 'Moyen (10-25 kg)'], ['grand', 'Grand (25-45 kg)'], ['geant', 'Géant (> 45 kg)']];
   function dogsCard() {
     const dogs = Store.dogsList();
     const card = h('div.card.flush');
@@ -458,7 +471,7 @@ create policy "hatchi_all" on public.hatchi_state
         h('div.row-ic', null, '🐕'),
         h('div.row-main', { onClick: () => { if (!d.active) { Store.setCurrentDog(d.id); UI.toast('🐾 ' + d.name); } } }, [
           h('strong', null, d.name),
-          h('small', null, [d.active ? 'Affiché actuellement' : 'Toucher pour afficher', d.birthdate ? ' · né(e) le ' + UI.fmtShortYear(d.birthdate) : ''].join(''))
+          h('small', null, [d.active ? 'Affiché actuellement' : 'Toucher pour afficher', d.breed ? ' · ' + d.breed : '', d.birthdate ? ' · né(e) le ' + UI.fmtShortYear(d.birthdate) : ''].join(''))
         ]),
         h('div.row-end', null, h('div.inline', { style: 'gap:4px' }, [
           d.active ? h('span.badge.ok', null, '✓') : null,
@@ -470,10 +483,15 @@ create policy "hatchi_all" on public.hatchi_state
   }
   function openDogEditor(d) {
     const isNew = !d;
-    let name = d ? d.name : '', birth = d ? d.birthdate : '';
+    let name = d ? d.name : '', birth = d ? d.birthdate : '', breed = d ? d.breed : '', size = d ? d.size : 'moyen';
     const body = h('div', null, [
       h('div.field', null, [h('label', null, 'Nom du chien'), h('input.input', { value: name, placeholder: 'Ex. Nala', onInput: (e) => name = e.target.value })]),
       h('div.field', null, [h('label', null, 'Date de naissance'), h('input.input', { type: 'date', value: birth, onChange: (e) => birth = e.target.value })]),
+      h('div.grid2', null, [
+        h('div.field', null, [h('label', null, 'Race'), h('input.input', { value: breed, placeholder: 'Ex. Cavalier King Charles', onInput: (e) => breed = e.target.value })]),
+        h('div.field', null, [h('label', null, 'Gabarit'),
+          h('select.input', { onChange: (e) => size = e.target.value }, DOG_SIZES.map(([v, l]) => h('option', { value: v, selected: v === size }, l)))])
+      ]),
       isNew ? h('p.muted.small', { style: 'margin:0 4px 10px' }, 'Le nouveau chien démarre avec ses propres soins, journal, poids, repas et identité — le stock, les courses et la pharmacie restent communs à la maison.') : null,
       h('div.modal-actions', null, [
         !isNew && Store.dogsList().length > 1 ? h('button.btn.danger', { onClick: async () => {
@@ -483,8 +501,11 @@ create policy "hatchi_all" on public.hatchi_state
         } }, '🗑') : h('button.btn.subtle', { onClick: () => UI.closeModal() }, 'Annuler'),
         h('button.btn', { style: 'flex:2', onClick: () => {
           if (!name.trim()) { UI.toast('Donne un nom'); return; }
-          if (isNew) { Store.addDog(name, birth); UI.toast('🐾 Bienvenue ' + name.trim() + ' !'); }
-          else Store.updateDogMeta(d.id, { name: name.trim(), birthdate: birth });
+          if (isNew) {
+            const id = Store.addDog(name, birth);
+            Store.updateDogMeta(id, { breed: breed.trim(), size });
+            UI.toast('🐾 Bienvenue ' + name.trim() + ' !');
+          } else Store.updateDogMeta(d.id, { name: name.trim(), birthdate: birth, breed: breed.trim(), size });
           UI.closeModal();
         } }, 'Enregistrer')
       ])
