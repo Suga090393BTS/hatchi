@@ -433,7 +433,7 @@ create policy "hatchi_all" on public.hatchi_state
   };
 
   /* ---------- Apparence ---------- */
-  const THEMES = [['foret', '🌿 Forêt', '#1f6f5c'], ['ocean', '🌊 Océan', '#2f6db5'], ['lilas', '💜 Lilas', '#7857c0'], ['terracotta', '🏺 Terracotta', '#c15f43']];
+  const THEMES = [['moderne', '✨ Moderne', '#6358d5'], ['foret', '🌿 Forêt', '#1f6f5c'], ['ocean', '🌊 Océan', '#2f6db5'], ['lilas', '💜 Lilas', '#7857c0'], ['terracotta', '🏺 Terracotta', '#c15f43']];
 
   function peopleCard() {
     const people = Store.get().people;

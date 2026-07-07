@@ -210,19 +210,23 @@
     const svg = document.createElementNS(NS, 'svg');
     svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
     const el = (n, attrs, txt) => { const x = document.createElementNS(NS, n); for (const k in attrs) x.setAttribute(k, attrs[k]); if (txt != null) x.textContent = txt; return x; };
+    // couleurs du thème actif
+    const css = getComputedStyle(document.documentElement);
+    const V = (n, fb) => (css.getPropertyValue(n).trim() || fb);
+    const cMain = V('--green', '#1f6f5c'), cAmber = V('--amber', '#c98a2b'), cRed = V('--red', '#a33b2e'), cSoft = V('--ink-soft', '#5d6b66');
     vals.forEach((v, i) => {
       if (!v) return;
       const x = pad.l + i * bw + bw * 0.15;
       const ok = !a.reco || (v >= a.reco * 0.8 && v <= a.reco * 1.25);
-      svg.appendChild(el('rect', { x, y: py(v), width: bw * 0.7, height: (H - pad.b) - py(v), rx: 3, fill: ok ? '#1f6f5c' : '#c98a2b' }));
+      svg.appendChild(el('rect', { x, y: py(v), width: bw * 0.7, height: (H - pad.b) - py(v), rx: 3, fill: ok ? cMain : cAmber }));
     });
     if (a.reco) {
-      svg.appendChild(el('line', { x1: pad.l, y1: py(a.reco), x2: W - pad.r, y2: py(a.reco), stroke: '#a33b2e', 'stroke-width': 1.5, 'stroke-dasharray': '5 4' }));
-      svg.appendChild(el('text', { x: 2, y: py(a.reco) + 4, 'font-size': 9, fill: '#a33b2e' }, a.reco + ' g'));
+      svg.appendChild(el('line', { x1: pad.l, y1: py(a.reco), x2: W - pad.r, y2: py(a.reco), stroke: cRed, 'stroke-width': 1.5, 'stroke-dasharray': '5 4' }));
+      svg.appendChild(el('text', { x: 2, y: py(a.reco) + 4, 'font-size': 9, fill: cRed }, a.reco + ' g'));
     }
     days.forEach((d, i) => {
       if (i % 2) return;
-      svg.appendChild(el('text', { x: pad.l + i * bw + bw / 2, y: H - 6, 'font-size': 8.5, fill: '#5d6b66', 'text-anchor': 'middle' }, +d.slice(8)));
+      svg.appendChild(el('text', { x: pad.l + i * bw + bw / 2, y: H - 6, 'font-size': 8.5, fill: cSoft, 'text-anchor': 'middle' }, +d.slice(8)));
     });
     return h('div.chart-wrap', null, svg);
   }

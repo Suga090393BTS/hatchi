@@ -210,7 +210,7 @@ Avion : cabine pour les petits gabarits (selon compagnie), sinon soute pressuris
         anchorMonday: mondayOf(todayISO()), // 1er lundi de la rotation
         rationPct: 2.5,          // % du poids corporel / jour (ration ménagère)
         stockAlertDays: 3,       // seuil d'alerte de réapprovisionnement (jours)
-        theme: 'foret',          // apparence : foret | ocean | lilas | terracotta
+        theme: 'moderne',        // apparence : moderne | foret | ocean | lilas | terracotta
         supabaseUrl: '',
         supabaseKey: '',
         spaceId: 'hatchi'
@@ -508,6 +508,11 @@ Avion : cabine pour les petits gabarits (selon compagnie), sinon soute pressuris
     } else {
       if (!s.dogs.find((x) => x.id === s.currentDogId)) s.currentDogId = s.dogs[0].id;
       loadDog(s, s.currentDogId);
+    }
+    // Nouvelle colorimétrie « Moderne » par défaut (l'ancien thème Forêt reste dispo dans Apparence)
+    if (!s.seeded.themeModerne) {
+      if (!s.settings.theme || s.settings.theme === 'foret') s.settings.theme = 'moderne';
+      s.seeded.themeModerne = true;
     }
     // Fiche « Contacts vétérinaires » du carnet : ancien véto, urgences près de chez moi, ancien détenteur
     if (!s.seeded.contactsPage) {

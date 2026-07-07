@@ -134,25 +134,30 @@
     const svg = document.createElementNS(NS, 'svg');
     svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
     const el = (n, attrs) => { const x = document.createElementNS(NS, n); for (const k in attrs) x.setAttribute(k, attrs[k]); return x; };
+    // couleurs du thème actif
+    const css = getComputedStyle(document.documentElement);
+    const V = (n, fb) => (css.getPropertyValue(n).trim() || fb);
+    const cMain = V('--green', '#1f6f5c'), cDark = V('--green-700', '#185647'), cOk = V('--ok', '#3f9d6b'),
+      cLine = V('--line', '#e7e1d6'), cSoft = V('--ink-soft', '#5d6b66'), cRed = V('--red', '#c8553d');
     // grilles min/max
     [min, max].forEach((v) => {
-      svg.appendChild(el('line', { x1: pad.l, y1: py(v), x2: W - pad.r, y2: py(v), stroke: '#e7e1d6', 'stroke-width': 1 }));
-      const t = el('text', { x: 2, y: py(v) + 4, 'font-size': 9, fill: '#5d6b66' }); t.textContent = v.toFixed(1); svg.appendChild(t);
+      svg.appendChild(el('line', { x1: pad.l, y1: py(v), x2: W - pad.r, y2: py(v), stroke: cLine, 'stroke-width': 1 }));
+      const t = el('text', { x: 2, y: py(v) + 4, 'font-size': 9, fill: cSoft }); t.textContent = v.toFixed(1); svg.appendChild(t);
     });
-    // couloir « dans la norme » (vert clair) + bordures pointillées
+    // couloir « dans la norme » + bordures pointillées
     const xTop = data.length <= 1 ? [[pad.l, norms[0]], [W - pad.r, norms[0]]] : norms.map((n, i) => [px(i), n]);
     const topPts = xTop.map(([x, n]) => x.toFixed(1) + ' ' + py(n.max).toFixed(1));
     const botPts = xTop.slice().reverse().map(([x, n]) => x.toFixed(1) + ' ' + py(n.min).toFixed(1));
-    svg.appendChild(el('path', { d: 'M ' + topPts.join(' L ') + ' L ' + botPts.join(' L ') + ' Z', fill: 'rgba(63,157,107,.15)' }));
+    svg.appendChild(el('path', { d: 'M ' + topPts.join(' L ') + ' L ' + botPts.join(' L ') + ' Z', fill: cOk + '26' }));
     [['max'], ['min']].forEach(([k]) => {
-      svg.appendChild(el('path', { d: 'M ' + xTop.map(([x, n]) => x.toFixed(1) + ' ' + py(n[k]).toFixed(1)).join(' L '), fill: 'none', stroke: '#3f9d6b', 'stroke-width': 1, 'stroke-dasharray': '4 3', opacity: .7 }));
+      svg.appendChild(el('path', { d: 'M ' + xTop.map(([x, n]) => x.toFixed(1) + ' ' + py(n[k]).toFixed(1)).join(' L '), fill: 'none', stroke: cOk, 'stroke-width': 1, 'stroke-dasharray': '4 3', opacity: .7 }));
     });
-    svg.appendChild(el('path', { d: area, fill: 'rgba(31,111,92,.12)' }));
-    svg.appendChild(el('path', { d: line, fill: 'none', stroke: '#1f6f5c', 'stroke-width': 2.5, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' }));
+    svg.appendChild(el('path', { d: area, fill: cMain + '1f' }));
+    svg.appendChild(el('path', { d: line, fill: 'none', stroke: cMain, 'stroke-width': 2.5, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' }));
     ptsArr.forEach((p, i) => {
       const out = data[i].kg < norms[i].min || data[i].kg > norms[i].max;
-      svg.appendChild(el('circle', { cx: p[0], cy: p[1], r: 3.5, fill: '#fff', stroke: out ? '#c8553d' : '#1f6f5c', 'stroke-width': 2 }));
-      if (i === data.length - 1) { const t = el('text', { x: p[0], y: p[1] - 8, 'font-size': 11, 'font-weight': 700, fill: '#185647', 'text-anchor': 'end' }); t.textContent = data[i].kg + ' kg'; svg.appendChild(t); }
+      svg.appendChild(el('circle', { cx: p[0], cy: p[1], r: 3.5, fill: '#fff', stroke: out ? cRed : cMain, 'stroke-width': 2 }));
+      if (i === data.length - 1) { const t = el('text', { x: p[0], y: p[1] - 8, 'font-size': 11, 'font-weight': 700, fill: cDark, 'text-anchor': 'end' }); t.textContent = data[i].kg + ' kg'; svg.appendChild(t); }
     });
     return h('div.chart-wrap', null, svg);
   }

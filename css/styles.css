@@ -27,6 +27,16 @@
 }
 
 /* ---------- Thèmes (Réglages → Apparence) ---------- */
+/* « Moderne » (défaut) : indigo doux sur gris froid clair — palette harmonisée */
+html[data-theme="moderne"] {
+  --green: #6358d5; --green-700: #4d43b3; --green-100: #edecfb;
+  --sand: #ededf3; --bg: #f6f6fa; --card: #ffffff;
+  --ink: #23243a; --ink-soft: #6f7288; --line: #e7e7f0;
+  --amber: #d9822b; --amber-100: #fbeedd;
+  --red: #e0474e; --red-100: #fbe5e7;
+  --blue: #3d76e0; --blue-100: #e6eefb;
+  --ok: #2f9e6e;
+}
 html[data-theme="ocean"] {
   --green: #2f6db5; --green-700: #24558d; --green-100: #e3edf8;
   --sand: #edf2f8; --bg: #f6f9fc; --ink: #22303e; --ink-soft: #5b6b7a; --line: #dfe7ef;
@@ -124,7 +134,7 @@ input, select, textarea { font-family: inherit; font-size: 16px; }
 .meal-line { display: flex; justify-content: space-between; padding: 3px 0; border-bottom: 1px dashed var(--line); }
 .meal-line:last-child { border-bottom: 0; }
 .meal-line .q { color: var(--ink-soft); font-variant-numeric: tabular-nums; white-space: nowrap; margin-left: 10px; }
-.meal-slot.done { background: var(--green-100); border-color: #bfe0d4; }
+.meal-slot.done { background: var(--green-100); border-color: var(--green-100); }
 
 /* Pills / chips / badges */
 .badge { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 700; padding: 4px 9px; border-radius: 999px; }
