@@ -93,7 +93,7 @@
       h('div.inline', { style: 'justify-content:space-between' }, [
         h('div', null, [
           h('strong', null, '🏥 ' + (vet.name || 'Vétérinaire non renseigné')),
-          h('div.muted.small', null, vet.name ? (vet.phone || 'Téléphone non renseigné') : 'Renseignez votre véto dans l\'onglet Identité')
+          h('div.muted.small', null, vet.name ? (vet.phone || 'Téléphone non renseigné') : 'Renseignez votre véto dans Chien › Identité')
         ]),
         vet.phone ? h('a.btn.sm', { href: 'tel:' + vet.phone.replace(/[^+0-9]/g, ''), style: 'text-decoration:none' }, '📞 Appeler') : null
       ])

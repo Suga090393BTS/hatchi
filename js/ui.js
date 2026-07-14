@@ -139,6 +139,17 @@
     setTimeout(() => URL.revokeObjectURL(a.href), 1500);
   }
 
+  /* ---------- En-tête d'une section ouverte depuis un onglet ----------
+     Motif unique de navigation : les sections du carnet (soins, vaccins,
+     journal…) s'ouvrent depuis l'onglet Chien et se referment par ce retour.
+     Un seul niveau : pas de seconde barre qui reproposerait les mêmes entrées. */
+  function subHead(title, onBack) {
+    return h('div.subhead', null, [
+      h('button.subhead-back', { onClick: onBack, title: 'Retour', 'aria-label': 'Retour' }, '‹'),
+      h('h2', null, title)
+    ]);
+  }
+
   function emptyState(icon, title, sub) {
     return h('div.empty', null, [
       h('div.big', null, icon),
@@ -147,5 +158,5 @@
     ]);
   }
 
-  window.UI = { h, clear, appendChildren, fmtLong, fmtShort, fmtShortYear, relDays, money, grams, toast, modal, closeModal, confirm, emptyState, download, DAYS, DAYS_SHORT, MONTHS };
+  window.UI = { h, clear, appendChildren, fmtLong, fmtShort, fmtShortYear, relDays, money, grams, toast, modal, closeModal, confirm, emptyState, subHead, download, DAYS, DAYS_SHORT, MONTHS };
 })();

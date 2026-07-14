@@ -211,7 +211,7 @@
             st !== 'ok' ? h('p.small', { style: 'margin:6px 2px 0;color:' + (st === 'bas' ? 'var(--red)' : 'var(--amber)') + ';font-weight:600' },
               st === 'bas' ? 'Poids un peu léger : augmente les rations et surveille — parles-en au véto si ça persiste.'
                            : 'Poids un peu élevé : réduis un peu les rations/friandises et surveille — le véto confirmera.') : null,
-            h('p.muted.small', { style: 'margin:6px 2px 0' }, 'Le couloir vert de la courbe = fourchette par gabarit selon l\'âge (comme le carnet de santé des bébés). La norme fine dépend de la race — règle le gabarit dans Réglages et valide avec ton véto.')
+            h('p.muted.small', { style: 'margin:6px 2px 0' }, 'Le couloir vert de la courbe = fourchette par gabarit selon l\'âge (comme le carnet de santé des bébés). La norme fine dépend de la race — règle le gabarit dans la fiche du chien (Chien › Modifier) et valide avec ton véto.')
           ]);
         })()
       ]));
@@ -230,12 +230,16 @@
     root.appendChild(h('button.btn.block', { style: 'margin-top:8px', onClick: () => openWeightEditor(null) }, '+ Ajouter une pesée'));
   }
 
+  // Chaque section s'ouvre depuis le menu de l'onglet Chien et se referme par le retour :
+  // un seul niveau de navigation (avant, un menu menait à une barre qui reproposait les mêmes entrées).
+  const SECTION_TITLES = {
+    soins: 'Soins & rappels', vaccins: 'Vaccins', identite: 'Identité & papiers',
+    carnet: 'Carnet santé', poids: 'Poids & courbe'
+  };
+
   Views.treatments = {
     render(root) {
-      root.appendChild(h('button.linkbtn', { style: 'margin:0 0 8px', onClick: () => App.go('dog') }, '‹ ' + (Store.get().settings.dogName || 'Chien')));
-      root.appendChild(h('div.seg', { style: 'margin-bottom:14px' }, [
-        ['soins', '💊 Soins'], ['vaccins', '💉 Vaccins'], ['identite', '🪪 Identité'], ['carnet', '📖 Carnet'], ['poids', '⚖️ Poids']
-      ].map(([v, l]) => h('button', { class: tab === v ? 'on' : '', onClick: () => { tab = v; App.rerender(); } }, l))));
+      root.appendChild(UI.subHead(SECTION_TITLES[tab] || 'Soins & rappels', () => App.go('dog')));
       if (tab === 'poids') { weightView(root); return; }
       if (tab === 'vaccins') { Views.health.vaccinsView(root); return; }
       if (tab === 'identite') { Views.health.identityView(root); return; }

@@ -23,9 +23,12 @@
     } else {
       viewEl.appendChild(h('div.empty', null, 'Vue indisponible'));
     }
-    // barre des chiens : masquée sur Courses (stock et achats communs à tous les chiens)
-    document.getElementById('dogbar').style.display = current === 'shopping' ? 'none' : '';
-    // active tab (Soins/Journal sont ouverts depuis Chien → on garde Chien en surbrillance)
+    // barre des chiens : masquée là où rien n'est propre à un chien
+    // (Courses = stock et achats communs ; Réglages = personnes, synchro, sauvegarde)
+    const commonToAllDogs = current === 'shopping' || current === 'settings';
+    document.getElementById('dogbar').style.display = commonToAllDogs ? 'none' : '';
+    // active tab (Soins/Journal sont ouverts depuis Chien → on garde Chien en surbrillance ;
+    // Réglages vit dans le bandeau ⚙️ et n'a plus d'onglet → aucun onglet actif)
     const activeRoute = (current === 'treatments' || current === 'journal') ? 'dog' : current;
     [...tabbar.children].forEach((b) => b.classList.toggle('active', b.dataset.route === activeRoute));
     revealActiveSeg();
@@ -117,6 +120,9 @@
       st === 'error' ? 'Erreur' : 'Local';
   });
   pill.addEventListener('click', () => go('settings'));
+
+  /* ---- Réglages : plus d'onglet dédié, on y accède par le ⚙️ du bandeau ---- */
+  document.getElementById('settingsBtn').addEventListener('click', () => go('settings'));
 
   /* ---- Bouton 📞 : appel direct du véto (choix véto/urgences si les deux sont renseignés) ---- */
   document.getElementById('vetCallBtn').addEventListener('click', () => {

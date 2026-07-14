@@ -354,8 +354,8 @@ create policy "hatchi_all" on public.hatchi_state
     render(root) {
       const s = Store.get().settings;
 
-      // Les chiens ont leur onglet 🐕 — ici, les listes et réglages communs à toute la maison.
-      root.appendChild(h('p.muted.small', { style: 'margin:0 4px 4px' }, 'Tout ce qui concerne les chiens (profil, ration, cycle…) est dans l\'onglet 🐕 Chien. Ici : les listes et réglages communs.'));
+      // Réglages n'a plus d'onglet : on y entre par le ⚙️ du bandeau, on en sort par ce retour.
+      root.appendChild(UI.subHead('Réglages', () => App.go('today')));
 
       // Personnes
       root.appendChild(h('div.section-title', null, 'Personnes (qui s’occupe des chiens)'));
@@ -497,7 +497,7 @@ create policy "hatchi_all" on public.hatchi_state
 
     return h('div.card', null, [
       h('div.card-head', null, [h('h3', null, '🔔 Notifications'), statusBadge]),
-      h('p.muted.small', { style: 'margin:0 0 12px' }, 'Reçoit une alerte des soins en retard à l’ouverture de l’app (une fois par jour). Pour des rappels fiables même app fermée — surtout sur iPhone — utilisez « Ajouter au calendrier » sur chaque soin (onglet Soins).'),
+      h('p.muted.small', { style: 'margin:0 0 12px' }, 'Reçoit une alerte des soins en retard à l’ouverture de l’app (une fois par jour). Pour des rappels fiables même app fermée — surtout sur iPhone — utilisez « Ajouter au calendrier » sur chaque soin (Chien › Soins).'),
       perm === 'default' ? h('button.btn.block', { onClick: async () => {
         try { const r = await Notification.requestPermission(); UI.toast(r === 'granted' ? 'Notifications activées ✓' : 'Refusé'); App.rerender(); } catch (e) { UI.toast('Erreur'); }
       } }, 'Activer les notifications') : null,
