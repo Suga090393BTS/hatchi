@@ -4,14 +4,7 @@
 (function () {
   'use strict';
   window.Views = window.Views || {};
-  const { h, money, grams, relDays } = UI;
-
-  const SORTIES = [
-    { key: 'ville', label: 'Ville', ic: '🏙️' },
-    { key: 'foret', label: 'Forêt', ic: '🌲' },
-    { key: 'educ', label: 'Éduc', ic: '🎓' },
-    { key: 'veto', label: 'Véto', ic: '🏥' }
-  ];
+  const { h, grams, relDays } = UI;
 
   function itemLines(items) {
     return (items || []).map((it) => {
@@ -85,129 +78,42 @@
     return card;
   }
 
-  // Rappels de soins urgents/à venir — renvoie null s'il n'y a rien (pas de bloc inutile)
-  function reminders(iso) {
-    const due = Store.get().treatments
-      .map((t) => ({ t, st: Store.dueStatus(t, iso) }))
-      .filter((x) => x.st.state === 'overdue' || x.st.state === 'soon')
-      .sort((a, b) => (a.st.days ?? 999) - (b.st.days ?? 999));
-
-    if (!due.length) return null;
-    return h('div.card.flush', null, due.map(({ t, st }) => {
-      const overdue = st.state === 'overdue';
-      return h('div.row', null, [
-        h('div.row-ic', null, iconFor(t.type)),
-        h('div.row-main', null, [
-          h('strong', null, t.name),
-          h('small', null, overdue ? `En retard — prévu ${relDays(st.days)}` : `À faire ${relDays(st.days)}`)
-        ]),
-        h('div.row-end', null, [
-          h('span', { class: 'badge ' + (overdue ? 'due' : 'soon') }, overdue ? 'En retard' : 'Bientôt'),
-          h('button.btn.sm', { onClick: () => { Store.markTreatmentDone(t.id, iso); UI.toast('Fait ✓'); } }, 'Fait')
-        ])
-      ]);
-    }));
-  }
-
   function iconFor(type) {
     return ({ collier: '🦟', vermifuge: '🪱', vaccin: '💉', yeux: '👁️', oreilles: '👂', dents: '🦷', griffes: '🐾', toilettage: '🛁' })[type] || '💊';
   }
 
-  // Fenêtre « qui y est allé ? » — s'ouvre automatiquement quand on coche une sortie
-  function openWhoModal(iso, s) {
-    const people = Store.get().people;
-    const entry = Store.dayEntry(iso);
-    const sel = new Set((entry.who || {})[s.key] || []);
-    const chips = people.map((p) => {
-      const c = h('button', {
-        class: 'chip' + (sel.has(p.id) ? ' on' : ''),
-        onClick: () => { if (sel.has(p.id)) sel.delete(p.id); else sel.add(p.id); c.classList.toggle('on'); }
-      }, p.name);
-      return c;
-    });
-    const save = () => {
-      const cur = Store.dayEntry(iso);
-      const who = Object.assign({}, cur.who);
-      who[s.key] = [...sel];
-      Store.updateDay(iso, { who });
-      UI.closeModal();
-    };
-    const body = h('div', null, [
-      h('p.muted.small', { style: 'margin:0 4px 12px' }, 'Qui y est allé avec ' + (Store.get().settings.dogName || 'Hatchi') + ' ?'),
-      h('div.chip-row', null, chips),
-      h('div.modal-actions', null, [
-        h('button.btn.subtle', { onClick: () => UI.closeModal() }, 'Passer'),
-        h('button.btn', { onClick: save }, 'Valider')
-      ])
-    ]);
-    UI.modal({ title: s.ic + ' ' + s.label + ' — avec qui ?', body });
-  }
-
-  function sortiesCard(iso) {
-    const entry = Store.dayEntry(iso);
-    const sorties = entry.sorties || {};
-    const hasPeople = Store.get().people.length > 0;
-
-    // Sous chaque sortie cochée : avec qui, et un lien pour modifier
-    const whoLines = hasPeople ? SORTIES.filter((s) => sorties[s.key]).map((s) => {
-      const ids = (entry.who || {})[s.key] || [];
-      const names = ids.map((id) => { const p = Store.person(id); return p ? p.name : null; }).filter(Boolean);
-      return h('div.inline', { style: 'gap:6px;margin-top:8px;font-size:13px' }, [
-        h('span', null, s.ic),
-        h('span', { class: names.length ? '' : 'muted' }, names.length ? 'avec ' + names.join(', ') : 'avec qui ?'),
-        h('button.linkbtn', { style: 'margin-left:auto', onClick: () => openWhoModal(iso, s) }, 'modifier')
-      ]);
-    }) : [];
-
-    return h('div.card', null, [
-      h('div.chip-row', null, SORTIES.map((s) =>
-        h('button', {
-          class: 'chip' + (sorties[s.key] ? ' on' : ''),
-          onClick: () => {
-            const on = !sorties[s.key];
-            const ns = Object.assign({}, sorties, { [s.key]: on });
-            const patch = { sorties: ns };
-            if (!on) {
-              // décoché : on retire aussi les personnes associées
-              const who = Object.assign({}, entry.who);
-              who[s.key] = [];
-              patch.who = who;
-            }
-            Store.updateDay(iso, patch);
-            if (on && hasPeople) openWhoModal(iso, s);
-          }
-        }, [h('span', null, s.ic), h('span', null, s.label)])
-      )),
-      whoLines.length ? h('div', { style: 'margin-top:4px' }, whoLines) : null
-    ]);
-  }
-
-  function todaySoins(iso) {
-    // Soins quotidiens/réguliers à cocher (yeux, oreilles, etc.)
-    const entry = Store.dayEntry(iso);
-    const soins = entry.soins || [];
-    const daily = Store.get().treatments.filter((t) => t.unit === 'jours');
-    if (!daily.length) return null;
-    return h('div.card', null, [
-      h('div.card-head', null, [h('h3', null, 'Soins du jour')]),
-      h('div.chip-row', null, daily.map((t) =>
-        h('button', {
-          class: 'chip' + (soins.includes(t.id) ? ' on' : ''),
-          onClick: () => {
-            Store.toggleDaySoin(iso, t.id);
-            if (!soins.includes(t.id)) Store.markTreatmentDone(t.id, iso);
-          }
-        }, [h('span', null, iconFor(t.type)), h('span', null, t.name)])
-      ))
-    ]);
-  }
-
-  // « À faire » : soins quotidiens à cocher + tâches libres, réunis dans une seule carte
+  // « À faire » : tout ce qu'il reste à faire aujourd'hui, dans UNE carte —
+  // les soins en retard/à venir, les soins quotidiens à cocher, puis les tâches libres.
+  // (Avant : « Rappels soins » et « Soins du jour » formaient deux blocs séparés.)
   function aFaireCard(iso) {
     const entry = Store.dayEntry(iso);
     const soins = entry.soins || [];
     const daily = Store.get().treatments.filter((t) => t.unit === 'jours');
     const card = h('div.card');
+
+    // 1) Les soins datés qui réclament une action (en retard ou imminents)
+    const due = Store.get().treatments
+      .map((t) => ({ t, st: Store.dueStatus(t, iso) }))
+      .filter((x) => x.st.state === 'overdue' || x.st.state === 'soon')
+      .sort((a, b) => (a.st.days ?? 999) - (b.st.days ?? 999));
+    if (due.length) {
+      card.appendChild(h('div.muted.small', { style: 'font-weight:700;margin-bottom:8px' }, 'Soins à faire'));
+      due.forEach(({ t, st }) => {
+        const overdue = st.state === 'overdue';
+        card.appendChild(h('div.inline', { style: 'gap:10px;padding:6px 0' }, [
+          h('span', { style: 'font-size:17px' }, iconFor(t.type)),
+          h('div', { style: 'flex:1;min-width:0' }, [
+            h('div', { style: 'font-size:14.5px;font-weight:600' }, t.name),
+            h('div.muted.small', null, overdue ? 'En retard — prévu ' + relDays(st.days) : 'À faire ' + relDays(st.days))
+          ]),
+          h('span', { class: 'badge ' + (overdue ? 'due' : 'soon') }, overdue ? 'En retard' : 'Bientôt'),
+          h('button.btn.sm', { onClick: () => { Store.markTreatmentDone(t.id, iso); UI.toast('Fait ✓'); } }, 'Fait')
+        ]));
+      });
+      card.appendChild(h('div.divider', { style: 'height:1px;background:var(--line);margin:12px 0' }));
+    }
+
+    // 2) Les soins quotidiens à cocher
     if (daily.length) {
       card.appendChild(h('div.muted.small', { style: 'font-weight:700;margin-bottom:8px' }, 'Soins du jour'));
       card.appendChild(h('div.chip-row', null, daily.map((t) =>
@@ -230,31 +136,6 @@
     card.appendChild(h('datalist', { id: 'hatchi-todos' }, Store.todoTexts().map((t) => h('option', { value: t }))));
     const inp = h('input.input', { placeholder: 'Ex. prendre RDV véto…', style: 'flex:1', list: 'hatchi-todos' });
     const add = () => { if (!inp.value.trim()) { UI.toast('Écris la tâche d\'abord'); return; } Store.addTodo(inp.value); inp.value = ''; inp.blur(); };
-    inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } });
-    card.appendChild(h('div.inline', { style: 'gap:8px;margin-top:8px' }, [inp, h('button.btn.sm', { onClick: add }, '+ Ajouter')]));
-    return card;
-  }
-
-  // Choses à faire : tâches libres, cochables (les faites disparaissent le lendemain)
-  function todosCard() {
-    const todos = Store.todosVisible();
-    const card = h('div.card');
-    todos.forEach((t) => {
-      card.appendChild(h('div.inline', { style: 'gap:10px;padding:5px 2px;align-items:center' }, [
-        h('button', { style: 'border:0;background:none;font-size:19px;padding:0;cursor:pointer', onClick: () => Store.toggleTodo(t.id) }, t.done ? '✅' : '⬜'),
-        h('span', { style: 'flex:1;font-size:14.5px' + (t.done ? ';text-decoration:line-through;opacity:.55' : ''), onClick: () => Store.toggleTodo(t.id) }, t.text),
-        h('button.delete-x', { onClick: () => Store.removeTodo(t.id) }, '✕')
-      ]));
-    });
-    if (!todos.length) card.appendChild(h('div.muted.small', { style: 'padding:2px 2px 4px' }, 'Ajoute ici ce que tu ne veux pas oublier (RDV véto, harnais à racheter…).'));
-    card.appendChild(h('datalist', { id: 'hatchi-todos' }, Store.todoTexts().map((t) => h('option', { value: t }))));
-    const inp = h('input.input', { placeholder: 'Ex. prendre RDV véto…', style: 'flex:1', list: 'hatchi-todos' });
-    const add = () => {
-      if (!inp.value.trim()) { UI.toast('Écris la tâche d\'abord'); return; }
-      Store.addTodo(inp.value);
-      inp.value = '';
-      inp.blur(); // déclenche le rafraîchissement différé
-    };
     inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } });
     card.appendChild(h('div.inline', { style: 'gap:8px;margin-top:8px' }, [inp, h('button.btn.sm', { onClick: add }, '+ Ajouter')]));
     return card;
@@ -332,11 +213,7 @@
       ]));
       root.appendChild(rationCard(iso));
 
-      // 3) Rappels de soins — seulement s'il y a quelque chose d'urgent
-      const rem = reminders(iso);
-      if (rem) { root.appendChild(h('div.section-title', null, 'Rappels soins')); root.appendChild(rem); }
-
-      // 4) À faire — soins du jour + tâches, dans une seule carte
+      // 3) À faire — soins en retard, soins du jour et tâches, réunis dans une seule carte
       root.appendChild(h('div.section-title', null, 'À faire'));
       root.appendChild(aFaireCard(iso));
     }

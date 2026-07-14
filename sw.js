@@ -1,5 +1,5 @@
 /* Hatchi service worker — offline app shell cache */
-const CACHE = 'hatchi-v56';
+const CACHE = 'hatchi-v57';
 const ASSETS = [
   './',
   './index.html',
