@@ -28,8 +28,20 @@
     // active tab (Soins/Journal sont ouverts depuis Chien → on garde Chien en surbrillance)
     const activeRoute = (current === 'treatments' || current === 'journal') ? 'dog' : current;
     [...tabbar.children].forEach((b) => b.classList.toggle('active', b.dataset.route === activeRoute));
+    revealActiveSeg();
     viewEl.scrollTop = 0;
     window.scrollTo(0, 0);
+  }
+
+  /* ---- Sous-nav (.seg) : elle défile quand il y a trop d'entrées ;
+     on ramène l'entrée active dans le champ de vision, sinon elle paraît non sélectionnée. ---- */
+  function revealActiveSeg() {
+    viewEl.querySelectorAll('.seg').forEach((seg) => {
+      if (seg.scrollWidth <= seg.clientWidth) return; // tout tient : rien à faire
+      const on = seg.querySelector('button.on');
+      if (!on) return;
+      seg.scrollLeft = on.offsetLeft - (seg.clientWidth - on.offsetWidth) / 2;
+    });
   }
 
   function go(route) {
@@ -62,10 +74,17 @@
   function applyTheme() {
     // plus de thème au choix : on retire tout attribut résiduel pour que la palette :root s'applique
     if (document.documentElement.dataset.theme) delete document.documentElement.dataset.theme;
-    const col = getComputedStyle(document.documentElement).getPropertyValue('--green').trim();
+    // le bandeau est clair : la barre du navigateur suit le fond du canevas
+    const col = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim();
     const meta = document.querySelector('meta[name="theme-color"]');
     if (meta && col) meta.content = col;
   }
+
+  /* ---- Filet sous le bandeau : visible seulement une fois la page défilée ---- */
+  const topbar = document.querySelector('.topbar');
+  const onScroll = () => topbar.classList.toggle('scrolled', window.scrollY > 4);
+  window.addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
 
   /* ---- Barre des chiens : un bouton par chien (emoji personnalisable) ---- */
   function renderDogBar() {

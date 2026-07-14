@@ -401,7 +401,7 @@
 
   Views.meals = {
     render(root) {
-      root.appendChild(h('div.seg', { style: 'margin-bottom:14px;flex-wrap:wrap;justify-content:center' }, [
+      root.appendChild(h('div.seg', { style: 'margin-bottom:14px' }, [
         h('button', { class: tab === 'donnes' ? 'on' : '', onClick: () => { tab = 'donnes'; App.rerender(); } }, '🍽 Donnés'),
         h('button', { class: tab === 'rotation' ? 'on' : '', onClick: () => { tab = 'rotation'; App.rerender(); } }, 'Rotation'),
         h('button', { class: tab === 'quantites' ? 'on' : '', onClick: () => { tab = 'quantites'; App.rerender(); } }, '⚖️ Quantités')

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover" />
-  <meta name="theme-color" content="#2b3a45" />
+  <meta name="theme-color" content="#f4f4f3" />
   <title>Hatchi — Suivi du chien</title>
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" href="icon.svg" type="image/svg+xml" />
@@ -23,8 +23,8 @@
             <small id="dateLabel"></small>
           </div>
         </div>
-        <div style="display:flex;gap:8px;align-items:center">
-          <button class="sync-pill" id="vetCallBtn" title="Appeler le vétérinaire">📞</button>
+        <div class="topbar-actions">
+          <button class="sync-pill" id="vetCallBtn" title="Appeler le vétérinaire" aria-label="Appeler le vétérinaire">📞</button>
           <button class="sync-pill" id="syncPill" title="État de la synchronisation">
             <span class="dot"></span><span id="syncText">Local</span>
           </button>
