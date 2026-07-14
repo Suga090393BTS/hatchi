@@ -104,7 +104,24 @@
     UI.modal({ title: 'Dose type du ' + slot, body });
   }
 
+  // La ration conseillée pilote les quantités : elle vit donc ici, et non sur l'onglet Chien.
+  function rationCard() {
+    const s = Store.get().settings;
+    const sug = Store.suggestedRationPct();
+    const cur = s.rationPct || 2.5;
+    return h('div.card', null, [
+      h('div.field', { style: 'margin-bottom:0' }, [h('label', null, 'Ration conseillée (% du poids / jour)'),
+        h('input.input', { type: 'number', step: '0.1', min: '1', max: '8', value: cur,
+          onChange: (e) => Store.updateSettings({ rationPct: +e.target.value || 2.5 }) })]),
+      h('div.inline', { style: 'justify-content:space-between;margin-top:8px;gap:8px' }, [
+        h('p.muted.small', { style: 'margin:0;flex:1' }, '💡 Suggestion pour un ' + Store.sizeLabel(s.dogSize).toLowerCase() + (sug > 3 ? ' encore chiot' : '') + ' : ~' + sug + ' % (à valider avec le véto).'),
+        sug !== cur ? h('button.btn.ghost.sm', { onClick: () => { Store.updateSettings({ rationPct: sug }); UI.toast('Ration réglée sur ' + sug + ' %'); } }, 'Appliquer') : null
+      ])
+    ]);
+  }
+
   function quantitesView(root) {
+    root.appendChild(rationCard());
     root.appendChild(h('div.seg', { style: 'margin-bottom:12px' }, [['matin', '🌅 Matin'], ['soir', '🌙 Soir']].map(([v, l]) =>
       h('button', { class: typesSlot === v ? 'on' : '', onClick: () => { typesSlot = v; App.rerender(); } }, l))));
     root.appendChild(h('p.muted.small', { style: 'margin:0 4px 10px' },
@@ -351,14 +368,20 @@
   function rotationView(root) {
     const cycleWeeks = Store.get().settings.cycleWeeks || 1;
 
-    // Sélecteur du nombre de semaines de cycle
+    // Le cycle et sa date de départ pilotent la rotation : ils vivent ici, avec elle.
+    // (Avant : cycleWeeks était éditable ici ET sur l'onglet Chien, la date de départ
+    //  seulement sur Chien, et ce texte renvoyait à tort vers Réglages.)
+    const s = Store.get().settings;
     root.appendChild(h('div.card', null, [
       h('div.card-head', null, [h('h3', null, 'Cycle de rotation'),
         h('span.muted.small', null, cycleWeeks === 1 ? '1 semaine (identique)' : cycleWeeks + ' semaines')]),
       h('div.seg', null, [1, 2, 3, 4].map((n) =>
         h('button', { class: n === cycleWeeks ? 'on' : '', onClick: () => { Store.updateSettings({ cycleWeeks: n }); if (editWeek > n) editWeek = 1; } }, n + ' sem.')
       )),
-      h('p.muted.small', { style: 'margin:10px 4px 0' }, 'L’app détermine automatiquement le repas du jour selon ce cycle et la date de départ (Réglages).')
+      h('div.field', { style: 'margin:12px 0 0' }, [h('label', null, 'Lundi de départ du cycle'),
+        h('input.input', { type: 'date', value: s.anchorMonday || '',
+          onChange: (e) => Store.updateSettings({ anchorMonday: Store.mondayOf(e.target.value) }) })]),
+      h('p.muted.small', { style: 'margin:0 4px' }, 'L’app détermine le repas du jour à partir de ce cycle et de cette date de départ.')
     ]));
 
     if (cycleWeeks > 1) {
@@ -399,15 +422,82 @@
     ]));
   }
 
+  /* ---------- Ingrédients & prix (le catalogue vit avec les repas, pas dans Réglages) ---------- */
+  const CATS_EDIT = [['viande', '🥩 Viande'], ['abats', '🫀 Abats'], ['os', '🦴 Os'], ['entier', '🐔 Animal entier'], ['oeuf', '🥚 Œuf'], ['legume', '🥕 Légume'], ['autre', '📦 Autre']];
+
+  function openIngredientEditor(ing) {
+    const isNew = !ing;
+    const d = ing ? JSON.parse(JSON.stringify(ing)) : { name: '', category: 'viande', unit: 'g', price: 0 };
+    const priceInput = h('input.input', { type: 'number', step: '0.01', min: '0', value: d.price, disabled: !!d.free, onInput: (e) => d.price = +e.target.value || 0 });
+    const priceLabel = h('label', null, d.unit === 'piece' ? 'Prix à l’unité (€)' : 'Prix au kilo (€/kg)');
+    const body = h('div', null, [
+      h('div.field', null, [h('label', null, 'Nom'), h('input.input', { value: d.name, onInput: (e) => d.name = e.target.value })]),
+      h('div.grid2', null, [
+        h('div.field', null, [h('label', null, 'Catégorie'),
+          h('select.input', { onChange: (e) => d.category = e.target.value }, CATS_EDIT.map(([v, l]) => h('option', { value: v, selected: v === d.category }, l)))]),
+        h('div.field', null, [h('label', null, 'Unité'),
+          h('select.input', { onChange: (e) => { d.unit = e.target.value; priceLabel.textContent = d.unit === 'piece' ? 'Prix à l’unité (€)' : 'Prix au kilo (€/kg)'; } },
+            [['g', 'grammes'], ['piece', 'pièce']].map(([v, l]) => h('option', { value: v, selected: v === d.unit }, l)))])
+      ]),
+      h('div.field', null, [priceLabel, priceInput]),
+      h('div.field', null, h('label.inline', { style: 'gap:8px;cursor:pointer;font-size:14px;font-weight:600;letter-spacing:0' }, [
+        h('input', { type: 'checkbox', checked: !!d.free, onChange: (e) => {
+          d.free = e.target.checked;
+          if (d.free) { d.price = 0; priceInput.value = 0; }
+          priceInput.disabled = d.free;
+        } }),
+        '🏡 Coût zéro € — je le produis moi-même'
+      ])),
+      h('div.modal-actions', null, [
+        !isNew ? h('button.btn.danger', { onClick: async () => { if (await UI.confirm('Supprimer cet ingrédient ?', { danger: true, ok: 'Supprimer' })) { Store.removeIngredient(ing.id); UI.closeModal(); } } }, '🗑')
+               : h('button.btn.subtle', { onClick: () => UI.closeModal() }, 'Annuler'),
+        h('button.btn', { style: 'flex:2', onClick: () => {
+          if (!d.name.trim()) { UI.toast('Nom requis'); return; }
+          if (isNew) Store.addIngredient(d); else Store.updateIngredient(ing.id, d);
+          UI.closeModal();
+        } }, 'Enregistrer')
+      ])
+    ]);
+    UI.modal({ title: isNew ? 'Nouvel ingrédient' : 'Modifier l’ingrédient', body });
+  }
+  Views.openIngredientEditor = openIngredientEditor;
+
+  function ingredientsView(root) {
+    root.appendChild(h('p.muted.small', { style: 'margin:0 4px 10px' },
+      'Ton catalogue d’aliments et leurs prix. Il alimente la composition des repas, le stock et le budget des courses.'));
+    const ings = Store.get().ingredients;
+    if (!ings.length) {
+      root.appendChild(h('div.card', null, UI.emptyState('🥩', 'Aucun ingrédient', 'Ajoute les aliments que tu donnes pour composer tes repas.')));
+    } else {
+      CAT_ORDER.forEach((cat) => {
+        const list = ings.filter((i) => i.category === cat);
+        if (!list.length) return;
+        root.appendChild(h('div.section-title', null, CAT_LABEL[cat]));
+        root.appendChild(h('div.card.flush', null, list.map((ing) =>
+          h('div.row', { onClick: () => openIngredientEditor(ing) }, [
+            h('div.row-ic', null, CAT_IC[ing.category] || '📦'),
+            h('div.row-main', null, [
+              h('strong', null, ing.name),
+              h('small', null, ing.free ? '🏡 Produit maison · 0 €' : (ing.price ? UI.money(ing.price) + (ing.unit === 'piece' ? '/u.' : '/kg') : 'Prix non défini'))
+            ]),
+            h('div.row-end', null, h('span.muted', null, '›'))
+          ]))));
+      });
+    }
+    root.appendChild(h('button.btn.block', { style: 'margin-top:10px', onClick: () => openIngredientEditor(null) }, '+ Nouvel ingrédient'));
+  }
+
   Views.meals = {
     render(root) {
       root.appendChild(h('div.seg', { style: 'margin-bottom:14px' }, [
         h('button', { class: tab === 'donnes' ? 'on' : '', onClick: () => { tab = 'donnes'; App.rerender(); } }, '🍽 Donnés'),
         h('button', { class: tab === 'rotation' ? 'on' : '', onClick: () => { tab = 'rotation'; App.rerender(); } }, 'Rotation'),
-        h('button', { class: tab === 'quantites' ? 'on' : '', onClick: () => { tab = 'quantites'; App.rerender(); } }, '⚖️ Quantités')
+        h('button', { class: tab === 'quantites' ? 'on' : '', onClick: () => { tab = 'quantites'; App.rerender(); } }, '⚖️ Quantités'),
+        h('button', { class: tab === 'ingredients' ? 'on' : '', onClick: () => { tab = 'ingredients'; App.rerender(); } }, '🥩 Ingrédients')
       ]));
       if (tab === 'donnes') donnesView(root);
       else if (tab === 'rotation') rotationView(root);
+      else if (tab === 'ingredients') ingredientsView(root);
       else quantitesView(root);
     }
   };

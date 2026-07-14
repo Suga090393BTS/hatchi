@@ -124,27 +124,9 @@
           h('div.row-end', null, h('span.muted', null, '›'))
         ]))));
 
-      // Alimentation (spécifique au chien)
-      root.appendChild(h('div.section-title', null, 'Alimentation'));
-      root.appendChild(h('div.card', null, [
-        h('div.field', null, [h('label', null, 'Ration (% du poids / jour)'),
-          h('input.input', { type: 'number', step: '0.1', min: '1', max: '8', value: s.rationPct || 2.5, onChange: (e) => Store.updateSettings({ rationPct: +e.target.value || 2.5 }) })]),
-        (() => {
-          const sug = Store.suggestedRationPct();
-          const cur = s.rationPct || 2.5;
-          return h('div.inline', { style: 'justify-content:space-between;margin:0 4px 10px;gap:8px' }, [
-            h('p.muted.small', { style: 'margin:0;flex:1' }, '💡 Suggestion pour un ' + Store.sizeLabel(s.dogSize).toLowerCase() + (sug > 3 ? ' encore chiot' : '') + ' : ~' + sug + ' % (à valider avec le véto).'),
-            sug !== cur ? h('button.btn.ghost.sm', { onClick: () => { Store.updateSettings({ rationPct: sug }); UI.toast('Ration réglée sur ' + sug + ' %'); } }, 'Appliquer') : null
-          ]);
-        })(),
-        h('div.grid2', null, [
-          h('div.field', null, [h('label', null, 'Lundi de départ du cycle'),
-            h('input.input', { type: 'date', value: s.anchorMonday || '', onChange: (e) => Store.updateSettings({ anchorMonday: Store.mondayOf(e.target.value) }) })]),
-          h('div.field', null, [h('label', null, 'Semaines dans le cycle'),
-            h('select.input', { onChange: (e) => Store.updateSettings({ cycleWeeks: +e.target.value }) }, [1, 2, 3, 4].map((n) => h('option', { value: n, selected: n === (s.cycleWeeks || 1) }, n)))])
-        ]),
-        h('p.muted.small', { style: 'margin:0 4px' }, 'Compose la rotation dans l\'onglet Repas.')
-      ]));
+      // L'alimentation (ration, cycle, rotation, ingrédients) vit entièrement dans l'onglet Repas :
+      // elle était auparavant éclatée entre Chien, Repas et Réglages — cycleWeeks était même
+      // éditable ici ET dans Repas.
 
       // Mes chiens (changer / ajouter)
       root.appendChild(h('div.section-title', null, 'Mes chiens'));

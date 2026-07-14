@@ -4,7 +4,7 @@
 (function () {
   'use strict';
   window.Views = window.Views || {};
-  const { h, money } = UI;
+  const { h } = UI;
 
   const SCHEMA_SQL =
 `-- À coller dans Supabase › SQL Editor, puis "Run"
@@ -16,59 +16,6 @@ create table if not exists public.hatchi_state (
 alter table public.hatchi_state enable row level security;
 create policy "hatchi_all" on public.hatchi_state
   for all using (true) with check (true);`;
-
-  /* ---------- Ingrédients / prix ---------- */
-  function openIngredientEditor(ing) {
-    const isNew = !ing;
-    let d = ing ? JSON.parse(JSON.stringify(ing)) : { name: '', category: 'viande', unit: 'g', price: 0 };
-    const CATS = [['viande', '🥩 Viande'], ['abats', '🫀 Abats'], ['os', '🦴 Os'], ['entier', '🐔 Animal entier'], ['oeuf', '🥚 Œuf'], ['legume', '🥕 Légume'], ['autre', '📦 Autre']];
-    const body = h('div', null, [
-      h('div.field', null, [h('label', null, 'Nom'), h('input.input', { value: d.name, onInput: (e) => d.name = e.target.value })]),
-      h('div.grid2', null, [
-        h('div.field', null, [h('label', null, 'Catégorie'),
-          h('select.input', { onChange: (e) => d.category = e.target.value }, CATS.map(([v, l]) => h('option', { value: v, selected: v === d.category }, l)))]),
-        h('div.field', null, [h('label', null, 'Unité'),
-          h('select.input', { onChange: (e) => d.unit = e.target.value }, [['g', 'grammes'], ['piece', 'pièce']].map(([v, l]) => h('option', { value: v, selected: v === d.unit }, l)))])
-      ]),
-      (() => {
-        const priceInput = h('input.input', { type: 'number', step: '0.01', min: '0', value: d.price, disabled: !!d.free, onInput: (e) => d.price = +e.target.value || 0 });
-        return h('div', null, [
-          h('div.field', null, [h('label', null, d.unit === 'piece' ? 'Prix à l’unité (€)' : 'Prix au kilo (€/kg)'), priceInput]),
-          h('div.field', null, h('label.inline', { style: 'gap:8px;cursor:pointer;font-size:14px;font-weight:600;text-transform:none;letter-spacing:0' }, [
-            h('input', { type: 'checkbox', checked: !!d.free, onChange: (e) => {
-              d.free = e.target.checked;
-              if (d.free) { d.price = 0; priceInput.value = 0; }
-              priceInput.disabled = d.free;
-            } }),
-            '🏡 Coût zéro € — je le produis moi-même'
-          ]))
-        ]);
-      })(),
-      h('div.modal-actions', null, [
-        !isNew ? h('button.btn.danger', { onClick: async () => { if (await UI.confirm('Supprimer cet ingrédient ?', { danger: true, ok: 'Supprimer' })) { Store.removeIngredient(ing.id); UI.closeModal(); } } }, '🗑')
-               : h('button.btn.subtle', { onClick: () => UI.closeModal() }, 'Annuler'),
-        h('button.btn', { style: 'flex:2', onClick: () => {
-          if (!d.name.trim()) { UI.toast('Nom requis'); return; }
-          if (isNew) Store.addIngredient(d); else Store.updateIngredient(ing.id, d);
-          UI.closeModal();
-        } }, 'Enregistrer')
-      ])
-    ]);
-    UI.modal({ title: isNew ? 'Nouvel ingrédient' : 'Modifier l’ingrédient', body });
-  }
-
-  function openIngredientsList() {
-    const body = h('div', null, [
-      h('div.card.flush', null, Store.get().ingredients.map((ing) =>
-        h('div.row', { onClick: () => { UI.closeModal(); setTimeout(() => openIngredientEditor(ing), 50); } }, [
-          h('div.row-ic', null, ({ viande: '🥩', abats: '🫀', os: '🦴', entier: '🐔', oeuf: '🥚', legume: '🥕' })[ing.category] || '📦'),
-          h('div.row-main', null, [h('strong', null, ing.name), h('small', null, ing.free ? '🏡 Produit maison · 0 €' : (ing.price ? money(ing.price) + (ing.unit === 'piece' ? '/u.' : '/kg') : 'Prix non défini'))]),
-          h('div.row-end', null, h('span.muted', null, '›'))
-        ]))),
-      h('button.btn.block', { style: 'margin-top:10px', onClick: () => { UI.closeModal(); setTimeout(() => openIngredientEditor(null), 50); } }, '+ Nouvel ingrédient')
-    ]);
-    UI.modal({ title: 'Ingrédients & prix', body });
-  }
 
   /* ---------- Morceaux (suggestions pour les achats) ---------- */
   function openCutsList() {
@@ -367,15 +314,6 @@ create policy "hatchi_all" on public.hatchi_state
         h('div.field', null, [h('label', null, 'Alerte stock (jours)'),
           h('input.input', { type: 'number', min: '1', value: s.stockAlertDays || 3, onChange: (e) => Store.updateSettings({ stockAlertDays: +e.target.value || 3 }) })]),
         h('p.muted.small', { style: 'margin:0 4px' }, 'Préviens-moi quand un ingrédient couvre moins de N jours de repas (tous chiens confondus).')
-      ]));
-
-      // Ingrédients
-      root.appendChild(h('div.section-title', null, 'Ingrédients & prix'));
-      root.appendChild(h('div.card', null, [
-        h('div.inline', { style: 'justify-content:space-between' }, [
-          h('div', null, [h('strong', null, Store.get().ingredients.length + ' ingrédients'), h('div.muted.small', null, 'Catalogue + prix pour le budget courses')]),
-          h('button.btn.ghost.sm', { onClick: openIngredientsList }, 'Gérer')
-        ])
       ]));
 
       // Morceaux
