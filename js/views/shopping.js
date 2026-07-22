@@ -237,6 +237,11 @@
       h('p.muted.small', { style: 'margin:8px 4px 0' }, 'Préviens-moi quand un ingrédient couvre moins de N jours de repas (tous chiens confondus).')
     ]));
     root.appendChild(h('div.card', null, h('div.inline', { style: 'justify-content:space-between' }, [
+      h('div', null, [h('strong', null, Store.get().ingredients.length + ' articles'),
+        h('div.muted.small', null, 'Noms, catégories et prix')]),
+      h('button.btn.ghost.sm', { onClick: () => Views.openIngredientsList() }, 'Gérer')
+    ])));
+    root.appendChild(h('div.card', null, h('div.inline', { style: 'justify-content:space-between' }, [
       h('div', null, [h('strong', null, Store.cuts().length + ' morceaux'),
         h('div.muted.small', null, 'Suggestions à la saisie d’un achat')]),
       h('button.btn.ghost.sm', { onClick: openCutsList }, 'Gérer')
@@ -382,7 +387,7 @@
 
     /* --- Étape 2 : choisir un article (onglets par catégorie) --- */
     function pickStep() {
-      const cats = ['viande', 'abats', 'os', 'entier', 'oeuf', 'legume'];
+      const cats = ['viande', 'abats', 'os', 'entier', 'oeuf', 'legume', 'autre'];
       const all = Store.get().ingredients.filter((i) => cats.includes(i.category));
       const present = CAT_ORDER.filter((cat) => all.some((i) => i.category === cat));
       const list = h('div');
@@ -396,8 +401,19 @@
             h('div.row-ic', null, catIcon(ing.category)),
             h('div.row-main', null, [h('strong', null, ing.name),
               h('small', null, priceLabel(ing))]),
-            h('div.row-end', null, h('span.muted', null, '›'))
+            // ✎ : corriger le nom (ou le prix) sans quitter la saisie de l'achat
+            h('div.row-end', null, h('button.btn.ghost.icon', {
+              title: 'Renommer / modifier',
+              onClick: (e) => { e.stopPropagation(); Views.openIngredientEditor(ing, { onDone: () => pickStep() }); }
+            }, '✎'))
           ]))));
+        // Un article acheté pour la première fois se crée ici, puis on enchaîne sur sa saisie
+        list.appendChild(h('button.btn.subtle.block', { style: 'margin-top:10px', onClick: () => {
+          Views.openIngredientEditor(null, {
+            preset: { category: cat },
+            onDone: (created) => (created ? formStep(created, null) : pickStep())
+          });
+        } }, '+ Nouvel article'));
       };
       const tabBar = h('div.chip-row', { style: 'margin-bottom:10px' }, present.map((cat) => {
         const b = h('button.chip', { onClick: () => show(cat) }, CAT_LABEL[cat]);

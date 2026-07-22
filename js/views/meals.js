@@ -433,9 +433,14 @@
   /* ---------- Ingrédients & prix (le catalogue vit avec les repas, pas dans Réglages) ---------- */
   const CATS_EDIT = [['viande', '🥩 Viande'], ['abats', '🫀 Abats'], ['os', '🦴 Os'], ['entier', '🐔 Animal entier'], ['oeuf', '🥚 Œuf'], ['legume', '🥕 Légume'], ['autre', '📦 Autre']];
 
-  function openIngredientEditor(ing) {
+  // opts.onDone(ingredient|null) : appelé après enregistrement/annulation/suppression.
+  // Permet d'appeler l'éditeur depuis un autre écran modal (ex. la saisie d'un achat)
+  // et d'y revenir ensuite sans perdre ce qui y était en cours.
+  function openIngredientEditor(ing, opts) {
+    const done = (result) => { UI.closeModal(); if (opts && opts.onDone) setTimeout(() => opts.onDone(result || null), 50); };
     const isNew = !ing;
-    const d = ing ? JSON.parse(JSON.stringify(ing)) : { name: '', category: 'viande', unit: 'g', price: 0 };
+    const d = ing ? JSON.parse(JSON.stringify(ing))
+                  : Object.assign({ name: '', category: 'viande', unit: 'g', price: 0 }, (opts && opts.preset) || {});
     const priceInput = h('input.input', { type: 'number', step: '0.01', min: '0', value: d.price, disabled: !!d.free, onInput: (e) => d.price = +e.target.value || 0 });
     const priceLabel = h('label', null, d.unit === 'piece' ? 'Prix à l’unité (€)' : 'Prix au kilo (€/kg)');
     const body = h('div', null, [
@@ -457,18 +462,41 @@
         '🏡 Coût zéro € — je le produis moi-même'
       ])),
       h('div.modal-actions', null, [
-        !isNew ? h('button.btn.danger', { onClick: async () => { if (await UI.confirm('Supprimer cet ingrédient ?', { danger: true, ok: 'Supprimer' })) { Store.removeIngredient(ing.id); UI.closeModal(); } } }, '🗑')
-               : h('button.btn.subtle', { onClick: () => UI.closeModal() }, 'Annuler'),
+        !isNew ? h('button.btn.danger', { onClick: async () => { if (await UI.confirm('Supprimer cet ingrédient ?', { danger: true, ok: 'Supprimer' })) { Store.removeIngredient(ing.id); done(null); } } }, '🗑')
+               : h('button.btn.subtle', { onClick: () => done(null) }, 'Annuler'),
         h('button.btn', { style: 'flex:2', onClick: () => {
           if (!d.name.trim()) { UI.toast('Nom requis'); return; }
-          if (isNew) Store.addIngredient(d); else Store.updateIngredient(ing.id, d);
-          UI.closeModal();
+          if (isNew) { const created = Store.addIngredient(d); done(created); }
+          else { Store.updateIngredient(ing.id, d); done(Store.ingredient(ing.id)); }
         } }, 'Enregistrer')
       ])
     ]);
     UI.modal({ title: isNew ? 'Nouvel ingrédient' : 'Modifier l’ingrédient', body });
   }
   Views.openIngredientEditor = openIngredientEditor;
+
+  // Liste modale du catalogue : même éditeur que l'onglet Ingrédients, mais appelable
+  // depuis un autre écran (Courses › Achats) sans avoir à le quitter.
+  function openIngredientsList() {
+    const back = () => openIngredientsList();
+    const ings = Store.get().ingredients;
+    const body = h('div', null, [
+      h('p.muted.small', { style: 'margin:0 0 10px' }, 'Touche un article pour le renommer, ou changer sa catégorie et son prix.'),
+      h('div.card.flush', { style: 'max-height:50vh;overflow-y:auto' }, ings.map((ing) =>
+        h('div.row', { onClick: () => openIngredientEditor(ing, { onDone: back }) }, [
+          h('div.row-ic', null, UI.catIcon(ing.category)),
+          h('div.row-main', null, [
+            h('strong', null, ing.name),
+            h('small', null, ing.free ? '🏡 Produit maison · 0 €' : (ing.price ? UI.money(ing.price) + (ing.unit === 'piece' ? '/u.' : '/kg') : 'Prix non défini'))
+          ]),
+          h('div.row-end', null, h('span.muted', null, '›'))
+        ]))),
+      h('button.btn.block', { style: 'margin-top:10px', onClick: () => openIngredientEditor(null, { onDone: back }) }, '+ Nouvel article'),
+      h('div.modal-actions', null, [h('button.btn.subtle', { onClick: () => UI.closeModal() }, 'Fermer')])
+    ]);
+    UI.modal({ title: 'Articles & prix', body });
+  }
+  Views.openIngredientsList = openIngredientsList;
 
   function ingredientsView(root) {
     root.appendChild(h('p.muted.small', { style: 'margin:0 4px 10px' },
