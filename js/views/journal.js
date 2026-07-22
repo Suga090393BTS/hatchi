@@ -77,6 +77,58 @@
     return wrap;
   }
 
+  /* ---------- Repas : cases « donné » + quantités réelles ----------
+     Les quantités se saisissent depuis n'importe quelle date du calendrier :
+     on peut donc rattraper un jour où on n'a pas eu le temps de noter. */
+  function itemsSummary(items) {
+    return (items || []).map((it) => {
+      const ing = Store.ingredient(it.ingredientId);
+      if (!ing) return null;
+      return ing.name + ' ' + (ing.unit === 'piece' ? '×' + it.qty : UI.grams(it.qty));
+    }).filter(Boolean).join(' · ');
+  }
+
+  // Enregistre la fiche du jour (partagé par « Enregistrer » et par le passage aux quantités)
+  function commitDraft(iso, draft) {
+    draft.meds = (draft.meds || []).filter((m) => (m.name || '').trim() || (m.dose || '').trim())
+      .map((m) => { const o = { name: m.name, dose: m.dose }; if (m.medId) o.medId = m.medId; return o; });
+    Store.updateDay(iso, draft);
+  }
+
+  // On quitte la fiche pour l'éditeur de quantités : elle est enregistrée au passage
+  // (une seule fenêtre à la fois — sinon la saisie en cours serait perdue).
+  function openFedFor(iso, slot, fed, draft) {
+    commitDraft(iso, draft);
+    UI.closeModal();
+    setTimeout(() => {
+      const presetItems = Store.itemsForDay(iso, slot).map((it) => ({ ingredientId: it.ingredientId, qty: it.qty }));
+      Views.openFedEditor(fed || null, { date: iso, slot, presetItems });
+    }, 60);
+  }
+
+  function repasField(iso, draft) {
+    const wrap = h('div.field', null, [
+      h('label', null, 'Repas'),
+      h('div.chip-row', null, [
+        chip('🌅 Matin donné', draft.repasMatin, () => draft.repasMatin = !draft.repasMatin),
+        chip('🌙 Soir donné', draft.repasSoir, () => draft.repasSoir = !draft.repasSoir)
+      ])
+    ]);
+    [['matin', '🌅', 'Matin'], ['soir', '🌙', 'Soir']].forEach(([slot, ic, label]) => {
+      const fed = Store.fedForSlot(iso, slot);
+      const summary = fed ? itemsSummary(fed.items) : '';
+      wrap.appendChild(h('div.inline', { style: 'gap:8px;margin-top:8px' }, [
+        h('span', { style: 'font-size:15px;flex:none' }, ic),
+        h('div', { style: 'flex:1;min-width:0' }, [
+          h('div.small', { class: summary ? '' : 'muted' }, summary || (label + ' — quantités non notées'))
+        ]),
+        h('button.btn.ghost.sm', { style: 'flex:none', onClick: () => openFedFor(iso, slot, fed, draft) },
+          summary ? 'Modifier' : '+ Quantités')
+      ]));
+    });
+    return wrap;
+  }
+
   function openEditor(iso) {
     const e = Store.dayEntry(iso);
     let draft = JSON.parse(JSON.stringify(e));
@@ -84,13 +136,7 @@
     draft.who = draft.who || {};
 
     const body = h('div', null, [
-      h('div.field', null, [
-        h('label', null, 'Repas'),
-        h('div.chip-row', null, [
-          chip('🌅 Matin donné', draft.repasMatin, () => draft.repasMatin = !draft.repasMatin),
-          chip('🌙 Soir donné', draft.repasSoir, () => draft.repasSoir = !draft.repasSoir)
-        ])
-      ]),
+      repasField(iso, draft),
       h('div.field', null, [
         h('label', null, 'Selles'),
         h('div.chip-row', null, SELLES.map((v) => chip(v, draft.selles === v, () => draft.selles = (draft.selles === v ? '' : v))))
@@ -106,11 +152,7 @@
       photoField(draft),
       h('div.modal-actions', null, [
         h('button.btn.subtle', { onClick: () => UI.closeModal() }, 'Annuler'),
-        h('button.btn', { onClick: () => {
-          draft.meds = (draft.meds || []).filter((m) => (m.name || '').trim() || (m.dose || '').trim())
-            .map((m) => { const o = { name: m.name, dose: m.dose }; if (m.medId) o.medId = m.medId; return o; });
-          Store.updateDay(iso, draft); UI.closeModal(); UI.toast('Journée enregistrée');
-        } }, 'Enregistrer')
+        h('button.btn', { onClick: () => { commitDraft(iso, draft); UI.closeModal(); UI.toast('Journée enregistrée'); } }, 'Enregistrer')
       ])
     ]);
     UI.modal({ title: fmtLong(iso), body });

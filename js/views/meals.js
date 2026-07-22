@@ -185,18 +185,29 @@
         draft.slot = v;
         [...slotSeg.children].forEach((b) => b.classList.toggle('on', b === e.currentTarget));
       } }, l)));
-    const itemsBoxHost = h('div', null, itemsEditor(draft, { stockOnly: true }));
+    // Repas du jour : on se limite à ce qui est en stock (on ne peut pas donner ce qu'on n'a pas).
+    // Repas passé rattrapé après coup : tout le catalogue, car ce qui a été mangé ce jour-là
+    // n'est justement plus en stock aujourd'hui.
+    const isToday = () => draft.date === Store.todayISO();
+    const itemsBoxHost = h('div');
+    const itemsLabel = h('label');
+    const rebuildItems = () => {
+      itemsLabel.textContent = isToday() ? 'Ce que j\'ai donné (selon le stock)' : 'Ce qui a été donné ce jour-là';
+      UI.clear(itemsBoxHost);
+      itemsBoxHost.appendChild(itemsEditor(draft, { stockOnly: isToday() }));
+    };
+    rebuildItems();
     const body = h('div', null, [
       h('div.grid2', null, [
-        h('div.field', null, [h('label', null, 'Date'), h('input.input', { type: 'date', value: draft.date, max: Store.todayISO(), onChange: (e) => draft.date = e.target.value })]),
+        h('div.field', null, [h('label', null, 'Date'), h('input.input', { type: 'date', value: draft.date, max: Store.todayISO(), onChange: (e) => { draft.date = e.target.value; rebuildItems(); } })]),
         h('div.field', null, [h('label', null, 'Repas du…'), slotSeg])
       ]),
-      h('div.field', null, [h('label', null, 'Ce que j\'ai donné (selon le stock)'), itemsBoxHost]),
+      h('div.field', null, [itemsLabel, itemsBoxHost]),
       h('button.btn.subtle.block', { style: 'margin-bottom:10px', onClick: () => {
         const sug = Store.suggestMealFromStock(draft.slot);
         if (sug.error) { UI.toast(sug.error); return; }
         draft.items = sug.items;
-        UI.clear(itemsBoxHost); itemsBoxHost.appendChild(itemsEditor(draft, { stockOnly: true }));
+        rebuildItems();
       } }, '✨ Suggérer selon le stock'),
       h('div.modal-actions', null, [
         existing ? h('button.btn.danger', { onClick: async () => {
