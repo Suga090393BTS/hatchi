@@ -11,7 +11,8 @@
   let typesSlot = 'matin'; // créneau actif dans Quantités : 'matin' | 'soir'
 
   const { CAT_LABEL, CAT_ORDER, CAT_IC } = UI; // catégories : source unique dans ui.js
-  let ingCat = 'tout'; // onglet de catégorie du catalogue
+  let ingCat = 'tout';  // onglet de catégorie du catalogue (onglet Repas › Ingrédients)
+  let listCat = 'tout'; // onglet de catégorie de la liste modale « Articles & prix »
 
   // Résumé d'une liste d'aliments : « Poulet 300 g · Œuf ×1 »
   function itemsSummary(items) {
@@ -475,23 +476,50 @@
   }
   Views.openIngredientEditor = openIngredientEditor;
 
+  // Tri commun aux listes d'articles : par catégorie, puis par nom
+  const byCatThenName = (a, b) =>
+    (CAT_ORDER.indexOf(a.category) - CAT_ORDER.indexOf(b.category)) || a.name.localeCompare(b.name, 'fr');
+
+  const ingRow = (ing, onPick) => h('div.row', { onClick: () => onPick(ing) }, [
+    h('div.row-ic', null, UI.catIcon(ing.category)),
+    h('div.row-main', null, [
+      h('strong', null, ing.name),
+      h('small', null, ing.free ? '🏡 Produit maison · 0 €' : (ing.price ? UI.money(ing.price) + (ing.unit === 'piece' ? '/u.' : '/kg') : 'Prix non défini'))
+    ]),
+    h('div.row-end', null, h('span.muted', null, '›'))
+  ]);
+
   // Liste modale du catalogue : même éditeur que l'onglet Ingrédients, mais appelable
   // depuis un autre écran (Courses › Achats) sans avoir à le quitter.
   function openIngredientsList() {
     const back = () => openIngredientsList();
-    const ings = Store.get().ingredients;
+    const tabsBox = h('div');
+    const listBox = h('div');
+
+    // Rendu en place : changer d'onglet ne rouvre pas la fenêtre
+    function renderList() {
+      const ings = Store.get().ingredients;
+      const present = CAT_ORDER.filter((c) => ings.some((i) => i.category === c));
+      if (listCat !== 'tout' && present.indexOf(listCat) === -1) listCat = 'tout';
+
+      UI.clear(tabsBox);
+      const tabs = UI.catTabs(present, listCat, (c) => { listCat = c; renderList(); });
+      if (tabs) tabsBox.appendChild(tabs);
+
+      const shown = ings
+        .filter((i) => listCat === 'tout' || i.category === listCat)
+        .slice().sort(byCatThenName);
+      UI.clear(listBox);
+      listBox.appendChild(h('div.card.flush', { style: 'max-height:46vh;overflow-y:auto' },
+        shown.map((ing) => ingRow(ing, (i) => openIngredientEditor(i, { onDone: back })))));
+    }
+    renderList();
+
     const body = h('div', null, [
       h('p.muted.small', { style: 'margin:0 0 10px' }, 'Touche un article pour le renommer, ou changer sa catégorie et son prix.'),
-      h('div.card.flush', { style: 'max-height:50vh;overflow-y:auto' }, ings.map((ing) =>
-        h('div.row', { onClick: () => openIngredientEditor(ing, { onDone: back }) }, [
-          h('div.row-ic', null, UI.catIcon(ing.category)),
-          h('div.row-main', null, [
-            h('strong', null, ing.name),
-            h('small', null, ing.free ? '🏡 Produit maison · 0 €' : (ing.price ? UI.money(ing.price) + (ing.unit === 'piece' ? '/u.' : '/kg') : 'Prix non défini'))
-          ]),
-          h('div.row-end', null, h('span.muted', null, '›'))
-        ]))),
-      h('button.btn.block', { style: 'margin-top:10px', onClick: () => openIngredientEditor(null, { onDone: back }) }, '+ Nouvel article'),
+      tabsBox,
+      listBox,
+      h('button.btn.block', { style: 'margin-top:10px', onClick: () => openIngredientEditor(null, { preset: { category: listCat === 'tout' ? 'viande' : listCat }, onDone: back }) }, '+ Nouvel article'),
       h('div.modal-actions', null, [h('button.btn.subtle', { onClick: () => UI.closeModal() }, 'Fermer')])
     ]);
     UI.modal({ title: 'Articles & prix', body });
@@ -511,16 +539,11 @@
       const tabs = UI.catTabs(present, ingCat, (c) => { ingCat = c; App.rerender(); });
       if (tabs) root.appendChild(tabs);
 
-      const shown = ingCat === 'tout' ? ings : ings.filter((i) => i.category === ingCat);
-      root.appendChild(h('div.card.flush', null, shown.map((ing) =>
-        h('div.row', { onClick: () => openIngredientEditor(ing) }, [
-          h('div.row-ic', null, UI.catIcon(ing.category)),
-          h('div.row-main', null, [
-            h('strong', null, ing.name),
-            h('small', null, ing.free ? '🏡 Produit maison · 0 €' : (ing.price ? UI.money(ing.price) + (ing.unit === 'piece' ? '/u.' : '/kg') : 'Prix non défini'))
-          ]),
-          h('div.row-end', null, h('span.muted', null, '›'))
-        ]))));
+      const shown = ings
+        .filter((i) => ingCat === 'tout' || i.category === ingCat)
+        .slice().sort(byCatThenName);
+      root.appendChild(h('div.card.flush', null,
+        shown.map((ing) => ingRow(ing, (i) => openIngredientEditor(i)))));
     }
     root.appendChild(h('button.btn.block', { style: 'margin-top:10px', onClick: () => openIngredientEditor(null) }, '+ Nouvel ingrédient'));
   }
