@@ -6,7 +6,7 @@
 
 - **Répondre en français** (l'app et l'utilisatrice sont en français).
 - **Aucun build, aucune dépendance npm** : HTML + CSS + JS classiques (scripts globaux, pas de modules ES, pas de bundler). Ne pas introduire d'outil de build sans demander.
-- **À chaque modif de fichier listé dans `sw.js`** : incrémenter `const CACHE = 'hatchi-vNN'` (ligne 2 de `sw.js`) sinon les appareils gardent l'ancienne version en cache. Version actuelle : **v59**.
+- **À chaque modif de fichier listé dans `sw.js`** : incrémenter `const CACHE = 'hatchi-vNN'` (ligne 2 de `sw.js`) sinon les appareils gardent l'ancienne version en cache. Version actuelle : **v60**.
 - Priorité forte de l'utilisatrice : **ne jamais perdre de données** (voir garde-fous synchro + sauvegardes cloud dans l'historique git). Prudence maximale sur `store.js` autour de la persistance et de la sync.
 
 ## Lancer / prévisualiser

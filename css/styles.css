@@ -232,6 +232,22 @@ input, select, textarea { font-family: inherit; font-size: 16px; letter-spacing:
   white-space: nowrap; margin-left: 12px;
 }
 
+/* ---------- Mon stock (Aujourd'hui) : lignes compactes, chiffres alignés ---------- */
+.stock-line {
+  display: flex; align-items: baseline; gap: 10px;
+  padding: 7px 0; border-bottom: 1px solid var(--line);
+  font-size: 14px;
+}
+.stock-line:last-of-type { border-bottom: 0; }
+.stock-line .n { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stock-line .q { font-variant-numeric: tabular-nums; font-weight: 650; white-space: nowrap; }
+.stock-line .q.out { color: var(--red); }
+.stock-line .c {
+  font-size: 12px; color: var(--ink-soft); white-space: nowrap;
+  min-width: 46px; text-align: right; font-variant-numeric: tabular-nums;
+}
+.stock-line .c.low { color: var(--red); font-weight: 650; }
+
 /* ---------- Badges ---------- */
 .badge {
   display: inline-flex; align-items: center; gap: 4px;
