@@ -170,7 +170,7 @@
     ]);
   }
 
-  const CAT_IC = { viande: '🥩', abats: '🫀', os: '🦴', entier: '🐔', oeuf: '🥚', legume: '🥕' };
+  let stockCat = 'tout'; // onglet de catégorie du bloc « Mon stock »
 
   // « Mon stock » : ce qu'il reste, recalculé à chaque rendu — donc à jour dès qu'un repas
   // est noté (le store redessine la vue à chaque changement).
@@ -186,14 +186,20 @@
       .sort((a, b) => rank(a.days) - rank(b.days));
 
     if (!rows.length) {
-      return h('div.card', null, UI.emptyState('📦', 'Aucun stock',
-        'Note tes courses dans l’onglet Courses pour suivre ce qu’il te reste.'));
+      return h('div', null, h('div.card', null, UI.emptyState('📦', 'Aucun stock',
+        'Note tes courses dans l’onglet Courses pour suivre ce qu’il te reste.')));
     }
 
-    const card = h('div.card', null, rows.map(({ ing, qty, days }) => {
+    // Onglets de catégorie plutôt qu'une longue liste à dérouler
+    const present = UI.CAT_ORDER.filter((c) => rows.some((r) => r.ing.category === c));
+    if (stockCat !== 'tout' && present.indexOf(stockCat) === -1) stockCat = 'tout';
+    const tabs = UI.catTabs(present, stockCat, (c) => { stockCat = c; App.rerender(); });
+    const shown = stockCat === 'tout' ? rows : rows.filter((r) => r.ing.category === stockCat);
+
+    const card = h('div.card', null, shown.map(({ ing, qty, days }) => {
       const low = days !== Infinity && days < seuil;
       return h('div.stock-line', null, [
-        h('span', { style: 'flex:none' }, CAT_IC[ing.category] || '📦'),
+        h('span', { style: 'flex:none' }, UI.catIcon(ing.category)),
         h('span.n', null, ing.name),
         h('span', { class: 'q' + (qty ? '' : ' out') }, qty ? (ing.unit === 'piece' ? '×' + qty : grams(qty)) : 'épuisé'),
         h('span', { class: 'c' + (low ? ' low' : '') },
@@ -201,7 +207,7 @@
       ]);
     }));
     card.appendChild(h('button.linkbtn', { style: 'margin-top:8px', onClick: () => App.go('shopping') }, 'Gérer le stock ›'));
-    return card;
+    return h('div', null, [tabs, card]);
   }
 
   Views.today = {

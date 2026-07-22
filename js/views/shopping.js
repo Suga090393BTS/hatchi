@@ -11,9 +11,8 @@
   let view = 'acheter'; // 'acheter' | 'stock'
   let stockCat = 'tout'; // filtre catégorie du stock : 'tout' | 'viande' | 'legume'…
 
-  const CAT_ORDER = ['viande', 'abats', 'os', 'entier', 'oeuf', 'legume', 'autre'];
-  const CAT_LABEL = { viande: '🥩 Viandes', abats: '🫀 Abats', os: '🦴 Os', entier: '🐔 Animaux entiers', oeuf: '🥚 Œufs', legume: '🥕 Légumes', autre: '📦 Autre' };
-  const catIcon = (c) => ({ viande: '🥩', abats: '🫀', os: '🦴', entier: '🐔', oeuf: '🥚', legume: '🥕' })[c] || '📦';
+  const { CAT_ORDER, CAT_LABEL, catIcon } = UI; // catégories : source unique dans ui.js
+  let buyCat = 'tout'; // onglet de catégorie de la liste de courses
 
   function lineCost(ing, qty) {
     if (!ing || !ing.price) return 0;
@@ -98,30 +97,36 @@
       })));
     }
 
+    // Budget : toujours calculé sur la liste entière, indépendamment de l'onglet affiché
     let grandTotal = 0;
-    const byCat = {};
-    buyIds.forEach((id) => { const ing = Store.ingredient(id); if (ing) (byCat[ing.category] = byCat[ing.category] || []).push({ ing, qty: toBuy[id] }); });
+    buyIds.forEach((id) => { const ing = Store.ingredient(id); if (ing) grandTotal += lineCost(ing, toBuy[id]); });
 
-    CAT_ORDER.forEach((cat) => {
-      const list = byCat[cat]; if (!list || !list.length) return;
-      list.sort((a, b) => a.ing.name.localeCompare(b.ing.name));
-      root.appendChild(h('div.section-title', null, CAT_LABEL[cat]));
-      root.appendChild(h('div.card.flush', null, list.map(({ ing, qty }) => {
-        const cost = lineCost(ing, qty); grandTotal += cost;
-        const have = Store.stockOf(ing.id);
-        return h('div.row', null, [
-          h('div.row-ic', null, catIcon(ing.category)),
-          h('div.row-main', null, [
-            h('strong', null, ing.name),
-            h('small', null, have ? ('déjà ' + qtyLabel(ing, have) + ' en stock') : priceLabel(ing))
-          ]),
-          h('div.row-end', null, [
-            h('strong', null, qtyLabel(ing, qty) + ' à acheter'),
-            cost ? h('span.muted.small', null, money(cost)) : null
-          ])
-        ]);
-      })));
-    });
+    // Onglets de catégorie plutôt qu'une longue liste à dérouler
+    const buyIngs = buyIds.map((id) => Store.ingredient(id)).filter(Boolean);
+    const present = CAT_ORDER.filter((c) => buyIngs.some((i) => i.category === c));
+    if (buyCat !== 'tout' && present.indexOf(buyCat) === -1) buyCat = 'tout';
+    const tabs = UI.catTabs(present, buyCat, (c) => { buyCat = c; App.rerender(); });
+    if (tabs) root.appendChild(tabs);
+
+    const shown = buyIngs
+      .filter((ing) => buyCat === 'tout' || ing.category === buyCat)
+      .sort((a, b) => (CAT_ORDER.indexOf(a.category) - CAT_ORDER.indexOf(b.category)) || a.name.localeCompare(b.name));
+    root.appendChild(h('div.card.flush', null, shown.map((ing) => {
+      const qty = toBuy[ing.id];
+      const cost = lineCost(ing, qty);
+      const have = Store.stockOf(ing.id);
+      return h('div.row', null, [
+        h('div.row-ic', null, catIcon(ing.category)),
+        h('div.row-main', null, [
+          h('strong', null, ing.name),
+          h('small', null, have ? ('déjà ' + qtyLabel(ing, have) + ' en stock') : priceLabel(ing))
+        ]),
+        h('div.row-end', null, [
+          h('strong', null, qtyLabel(ing, qty) + ' à acheter'),
+          cost ? h('span.muted.small', null, money(cost)) : null
+        ])
+      ]);
+    })));
 
     if (covered) root.appendChild(h('p.muted.small.center', { style: 'margin:6px' },
       '✓ ' + covered + ' ingrédient' + (covered > 1 ? 's' : '') + ' déjà couvert' + (covered > 1 ? 's' : '') + ' par le stock'));
@@ -130,7 +135,7 @@
       root.appendChild(h('div.card', { style: 'margin-top:8px' }, [
         h('div.inline', { style: 'justify-content:space-between' }, [
           h('div', null, [h('div.muted.small', null, 'Budget estimé'), h('div', { style: 'font-size:24px;font-weight:800;color:var(--green-700)' }, money(grandTotal))]),
-          h('button.btn.ghost.sm', { onClick: () => App.go('settings') }, 'Prix')
+          h('button.btn.ghost.sm', { onClick: () => App.go('meals') }, 'Prix')
         ])
       ]));
       root.appendChild(h('div.inline', { style: 'gap:8px' }, [
@@ -176,16 +181,11 @@
     const used = Store.needs(Store.planningDays());
     const allIngs = Store.get().ingredients.filter((i) => Store.stockOf(i.id) > 0 || used[i.id]);
 
-    // Onglets de filtre par catégorie : je touche « Légumes » et je ne vois que les légumes
+    // Onglets de catégorie (barre partagée)
     const presentCats = CAT_ORDER.filter((cat) => allIngs.some((i) => i.category === cat));
-    if (presentCats.length > 1) {
-      if (stockCat !== 'tout' && !presentCats.includes(stockCat)) stockCat = 'tout';
-      root.appendChild(h('div.chip-row', { style: 'margin-bottom:12px' }, [
-        h('button', { class: 'chip' + (stockCat === 'tout' ? ' on' : ''), onClick: () => { stockCat = 'tout'; App.rerender(); } }, 'Tout'),
-        ...presentCats.map((cat) =>
-          h('button', { class: 'chip' + (stockCat === cat ? ' on' : ''), onClick: () => { stockCat = cat; App.rerender(); } }, CAT_LABEL[cat]))
-      ]));
-    }
+    if (stockCat !== 'tout' && presentCats.indexOf(stockCat) === -1) stockCat = 'tout';
+    const stockTabs = UI.catTabs(presentCats, stockCat, (c) => { stockCat = c; App.rerender(); });
+    if (stockTabs) root.appendChild(stockTabs);
     const ings = stockCat === 'tout' ? allIngs : allIngs.filter((i) => i.category === stockCat);
 
     if (!ings.length) {

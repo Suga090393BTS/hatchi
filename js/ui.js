@@ -139,6 +139,27 @@
     setTimeout(() => URL.revokeObjectURL(a.href), 1500);
   }
 
+  /* ---------- Catégories d'ingrédients (source unique) ---------- */
+  const CAT_ORDER = ['viande', 'abats', 'os', 'entier', 'oeuf', 'legume', 'autre'];
+  const CAT_LABEL = { viande: '🥩 Viandes', abats: '🫀 Abats', os: '🦴 Os', entier: '🐔 Animaux entiers', oeuf: '🥚 Œufs', legume: '🥕 Légumes', autre: '📦 Autre' };
+  const CAT_IC = { viande: '🥩', abats: '🫀', os: '🦴', entier: '🐔', oeuf: '🥚', legume: '🥕', autre: '📦' };
+  const catIcon = (c) => CAT_IC[c] || '📦';
+
+  /* ---------- Onglets de catégorie ----------
+     Barre partagée par toutes les listes d'ingrédients (stock, courses, catalogue) :
+     « Tout », puis une entrée par catégorie réellement présente — on choisit sa
+     catégorie au lieu de dérouler toute la liste.
+     Renvoie null s'il y a moins de deux catégories : un onglet unique n'apporte rien. */
+  function catTabs(cats, current, onPick) {
+    const present = CAT_ORDER.filter((c) => cats.indexOf(c) !== -1);
+    if (present.length < 2) return null;
+    const btn = (v, label) => h('button', {
+      class: 'chip' + (current === v ? ' on' : ''), onClick: () => onPick(v)
+    }, label);
+    return h('div.chip-row', { style: 'margin-bottom:12px' },
+      [btn('tout', 'Tout')].concat(present.map((c) => btn(c, CAT_LABEL[c]))));
+  }
+
   /* ---------- En-tête d'une section ouverte depuis un onglet ----------
      Motif unique de navigation : les sections du carnet (soins, vaccins,
      journal…) s'ouvrent depuis l'onglet Chien et se referment par ce retour.
@@ -158,5 +179,5 @@
     ]);
   }
 
-  window.UI = { h, clear, appendChildren, fmtLong, fmtShort, fmtShortYear, relDays, money, grams, toast, modal, closeModal, confirm, emptyState, subHead, download, DAYS, DAYS_SHORT, MONTHS };
+  window.UI = { h, clear, appendChildren, fmtLong, fmtShort, fmtShortYear, relDays, money, grams, toast, modal, closeModal, confirm, emptyState, subHead, catTabs, catIcon, download, CAT_ORDER, CAT_LABEL, CAT_IC, DAYS, DAYS_SHORT, MONTHS };
 })();

@@ -10,9 +10,8 @@
   let tab = 'donnes'; // 'donnes' | 'rotation' | 'quantites'
   let typesSlot = 'matin'; // créneau actif dans Quantités : 'matin' | 'soir'
 
-  const CAT_LABEL = { viande: '🥩 Viandes', abats: '🫀 Abats', os: '🦴 Os', entier: '🐔 Animaux entiers', oeuf: '🥚 Œufs', legume: '🥕 Légumes', autre: '📦 Autre' };
-  const CAT_ORDER = ['viande', 'abats', 'os', 'entier', 'oeuf', 'legume', 'autre'];
-  const CAT_IC = { viande: '🥩', abats: '🫀', os: '🦴', entier: '🐔', oeuf: '🥚', legume: '🥕' };
+  const { CAT_LABEL, CAT_ORDER, CAT_IC } = UI; // catégories : source unique dans ui.js
+  let ingCat = 'tout'; // onglet de catégorie du catalogue
 
   // Résumé d'une liste d'aliments : « Poulet 300 g · Œuf ×1 »
   function itemsSummary(items) {
@@ -478,20 +477,22 @@
     if (!ings.length) {
       root.appendChild(h('div.card', null, UI.emptyState('🥩', 'Aucun ingrédient', 'Ajoute les aliments que tu donnes pour composer tes repas.')));
     } else {
-      CAT_ORDER.forEach((cat) => {
-        const list = ings.filter((i) => i.category === cat);
-        if (!list.length) return;
-        root.appendChild(h('div.section-title', null, CAT_LABEL[cat]));
-        root.appendChild(h('div.card.flush', null, list.map((ing) =>
-          h('div.row', { onClick: () => openIngredientEditor(ing) }, [
-            h('div.row-ic', null, CAT_IC[ing.category] || '📦'),
-            h('div.row-main', null, [
-              h('strong', null, ing.name),
-              h('small', null, ing.free ? '🏡 Produit maison · 0 €' : (ing.price ? UI.money(ing.price) + (ing.unit === 'piece' ? '/u.' : '/kg') : 'Prix non défini'))
-            ]),
-            h('div.row-end', null, h('span.muted', null, '›'))
-          ]))));
-      });
+      // Onglets de catégorie plutôt qu'une longue liste à dérouler
+      const present = CAT_ORDER.filter((c) => ings.some((i) => i.category === c));
+      if (ingCat !== 'tout' && present.indexOf(ingCat) === -1) ingCat = 'tout';
+      const tabs = UI.catTabs(present, ingCat, (c) => { ingCat = c; App.rerender(); });
+      if (tabs) root.appendChild(tabs);
+
+      const shown = ingCat === 'tout' ? ings : ings.filter((i) => i.category === ingCat);
+      root.appendChild(h('div.card.flush', null, shown.map((ing) =>
+        h('div.row', { onClick: () => openIngredientEditor(ing) }, [
+          h('div.row-ic', null, UI.catIcon(ing.category)),
+          h('div.row-main', null, [
+            h('strong', null, ing.name),
+            h('small', null, ing.free ? '🏡 Produit maison · 0 €' : (ing.price ? UI.money(ing.price) + (ing.unit === 'piece' ? '/u.' : '/kg') : 'Prix non défini'))
+          ]),
+          h('div.row-end', null, h('span.muted', null, '›'))
+        ]))));
     }
     root.appendChild(h('button.btn.block', { style: 'margin-top:10px', onClick: () => openIngredientEditor(null) }, '+ Nouvel ingrédient'));
   }
