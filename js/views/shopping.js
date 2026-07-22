@@ -8,7 +8,7 @@
   const { h, money, grams } = UI;
 
   let range = 'week';   // 'week' | 'month'
-  let view = 'acheter'; // 'acheter' | 'stock'
+  let view = 'acheter'; // 'acheter' | 'achats' | 'stock'
   let stockCat = 'tout'; // filtre catégorie du stock : 'tout' | 'viande' | 'legume'…
 
   const { CAT_ORDER, CAT_LABEL, catIcon } = UI; // catégories : source unique dans ui.js
@@ -37,11 +37,15 @@
 
   Views.shopping = {
     render(root) {
+      const tab = (v, label) => h('button', { class: view === v ? 'on' : '', onClick: () => { view = v; App.rerender(); } }, label);
       root.appendChild(h('div.seg', { style: 'margin-bottom:14px' }, [
-        h('button', { class: view === 'acheter' ? 'on' : '', onClick: () => { view = 'acheter'; App.rerender(); } }, '🛒 À acheter'),
-        h('button', { class: view === 'stock' ? 'on' : '', onClick: () => { view = 'stock'; App.rerender(); } }, '📦 Achats')
+        tab('acheter', '🛒 À acheter'),
+        tab('achats', '🧾 Achats'),
+        tab('stock', '📦 Stock')
       ]));
-      if (view === 'stock') stockView(root); else acheterView(root);
+      if (view === 'achats') achatsView(root);
+      else if (view === 'stock') stockView(root);
+      else acheterView(root);
     }
   };
 
@@ -165,51 +169,15 @@
     UI.modal({ title: '🏡 Préparé — ' + ing.name, body });
   }
 
-  /* ---------- MON CONGÉLATEUR ---------- */
-  function stockView(root) {
-    const low = Store.lowStock();
-    if (low.length) {
-      root.appendChild(h('div.card', { style: 'background:var(--amber-100);border-color:#eccf9a' }, [
-        h('strong', null, '🧊 Bientôt épuisé'),
-        h('div.small', { style: 'margin-top:4px' }, low.map((x) => x.ing.name).join(', '))
-      ]));
-    }
-
+  /* ---------- ACHATS : enregistrer ses courses, historique, listes ---------- */
+  function achatsView(root) {
     root.appendChild(h('button.btn.block', { style: 'margin-bottom:12px', onClick: () => openPurchaseModal() }, '🛒 J’ai fait des courses'));
 
-    // Inventaire : une seule quantité par ingrédient (plus de distinction frigo / congélo)
-    const used = Store.needs(Store.planningDays());
-    const allIngs = Store.get().ingredients.filter((i) => Store.stockOf(i.id) > 0 || used[i.id]);
-
-    // Onglets de catégorie (barre partagée)
-    const presentCats = CAT_ORDER.filter((cat) => allIngs.some((i) => i.category === cat));
-    if (stockCat !== 'tout' && presentCats.indexOf(stockCat) === -1) stockCat = 'tout';
-    const stockTabs = UI.catTabs(presentCats, stockCat, (c) => { stockCat = c; App.rerender(); });
-    if (stockTabs) root.appendChild(stockTabs);
-    const ings = stockCat === 'tout' ? allIngs : allIngs.filter((i) => i.category === stockCat);
-
-    if (!ings.length) {
-      root.appendChild(h('div.card', null, UI.emptyState('📦', 'Aucun article en stock',
-        'Appuie sur « J’ai fait des courses » pour enregistrer ce que tu as acheté.')));
-    } else {
-      root.appendChild(h('div.card.flush', null, ings.map((ing) => {
-        const qty = Store.stockOf(ing.id);
-        const days = Store.coverageDays(ing.id);
-        const cov = days === Infinity ? null : (days < 1 ? 'reste <1 j' : 'reste ~' + Math.floor(days) + ' j');
-        const lowS = days !== Infinity && days < (Store.get().settings.stockAlertDays || 3);
-        return h('div.row', { onClick: () => editStock(ing) }, [
-          h('div.row-ic', null, catIcon(ing.category)),
-          h('div.row-main', null, [h('strong', null, ing.name),
-            h('small', null, [qty ? qtyLabel(ing, qty) : 'épuisé', cov ? '  ·  ' : '',
-              cov ? h('span', { style: lowS ? 'color:var(--red);font-weight:700' : '' }, cov) : ''])]),
-          h('div.row-end', null, h('button.btn.ghost.icon', { onClick: () => editStock(ing) }, '✎'))
-        ]);
-      })));
-    }
-
-    // Historique des achats + dépenses du mois
     const purchases = Store.purchasesSorted();
-    if (purchases.length) {
+    if (!purchases.length) {
+      root.appendChild(h('div.card', null, UI.emptyState('🧾', 'Aucun achat enregistré',
+        'Enregistre tes courses pour suivre ton budget et alimenter ton stock.')));
+    } else {
       const spent = Store.spentInMonth();
       root.appendChild(h('div.section-title', null, 'Mes courses récentes'));
       if (spent) root.appendChild(h('div.card', { style: 'padding:12px 16px' }, h('div.inline', { style: 'justify-content:space-between' }, [
@@ -226,16 +194,8 @@
       root.appendChild(h('p.muted.small.center', { style: 'margin:8px' }, 'Touche un achat pour le voir ou le supprimer.'));
     }
 
-    // Réglages propres aux courses, en pied de page.
-    // (Ils étaient dans Réglages, loin de ce qu'ils pilotent.)
-    const s = Store.get().settings;
-    root.appendChild(h('div.section-title', null, 'Réglages des courses'));
-    root.appendChild(h('div.card', null, [
-      h('div.field', { style: 'margin-bottom:0' }, [h('label', null, 'Alerte stock (jours)'),
-        h('input.input', { type: 'number', min: '1', value: s.stockAlertDays || 3,
-          onChange: (e) => Store.updateSettings({ stockAlertDays: +e.target.value || 3 }) })]),
-      h('p.muted.small', { style: 'margin:8px 4px 0' }, 'Préviens-moi quand un ingrédient couvre moins de N jours de repas (tous chiens confondus).')
-    ]));
+    // Listes qui servent à la saisie d'un achat
+    root.appendChild(h('div.section-title', null, 'Listes'));
     root.appendChild(h('div.card', null, h('div.inline', { style: 'justify-content:space-between' }, [
       h('div', null, [h('strong', null, Store.get().ingredients.length + ' articles'),
         h('div.muted.small', null, 'Noms, catégories et prix')]),
@@ -246,6 +206,58 @@
         h('div.muted.small', null, 'Suggestions à la saisie d’un achat')]),
       h('button.btn.ghost.sm', { onClick: openCutsList }, 'Gérer')
     ])));
+  }
+
+  /* ---------- STOCK : ce qu'il reste, par catégorie ---------- */
+  function stockView(root) {
+    const low = Store.lowStock();
+    if (low.length) {
+      root.appendChild(h('div.card', { style: 'background:var(--amber-100);border-color:#eccf9a' }, [
+        h('strong', null, '🧊 Bientôt épuisé'),
+        h('div.small', { style: 'margin-top:4px' }, low.map((x) => x.ing.name).join(', '))
+      ]));
+    }
+
+    // Inventaire : une seule quantité par ingrédient (plus de distinction frigo / congélo)
+    const used = Store.needs(Store.planningDays());
+    const allIngs = Store.get().ingredients.filter((i) => Store.stockOf(i.id) > 0 || used[i.id]);
+
+    // Onglets de catégorie (barre partagée)
+    const presentCats = CAT_ORDER.filter((cat) => allIngs.some((i) => i.category === cat));
+    if (stockCat !== 'tout' && presentCats.indexOf(stockCat) === -1) stockCat = 'tout';
+    const stockTabs = UI.catTabs(presentCats, stockCat, (c) => { stockCat = c; App.rerender(); });
+    if (stockTabs) root.appendChild(stockTabs);
+
+    const ings = (stockCat === 'tout' ? allIngs : allIngs.filter((i) => i.category === stockCat))
+      .slice().sort((a, b) => (CAT_ORDER.indexOf(a.category) - CAT_ORDER.indexOf(b.category)) || a.name.localeCompare(b.name, 'fr'));
+
+    if (!ings.length) {
+      root.appendChild(h('div.card', null, UI.emptyState('📦', 'Aucun article en stock',
+        'Enregistre tes courses dans l’onglet Achats pour alimenter ton stock.')));
+    } else {
+      root.appendChild(h('div.card.flush', null, ings.map((ing) => {
+        const qty = Store.stockOf(ing.id);
+        const days = Store.coverageDays(ing.id);
+        const cov = days === Infinity ? null : (days < 1 ? 'reste <1 j' : 'reste ~' + Math.floor(days) + ' j');
+        const lowS = days !== Infinity && days < (Store.get().settings.stockAlertDays || 3);
+        return h('div.row', { onClick: () => editStock(ing) }, [
+          h('div.row-ic', null, catIcon(ing.category)),
+          h('div.row-main', null, [h('strong', null, ing.name),
+            h('small', null, [qty ? qtyLabel(ing, qty) : 'épuisé', cov ? '  ·  ' : '',
+              cov ? h('span', { style: lowS ? 'color:var(--red);font-weight:700' : '' }, cov) : ''])]),
+          h('div.row-end', null, h('button.btn.ghost.icon', { onClick: () => editStock(ing) }, '✎'))
+        ]);
+      })));
+    }
+
+    // L'alerte pilote ce qui s'affiche ci-dessus : elle vit avec le stock
+    root.appendChild(h('div.section-title', null, 'Réglage'));
+    root.appendChild(h('div.card', null, [
+      h('div.field', { style: 'margin-bottom:0' }, [h('label', null, 'Alerte stock (jours)'),
+        h('input.input', { type: 'number', min: '1', value: Store.get().settings.stockAlertDays || 3,
+          onChange: (e) => Store.updateSettings({ stockAlertDays: +e.target.value || 3 }) })]),
+      h('p.muted.small', { style: 'margin:8px 4px 0' }, 'Préviens-moi quand un ingrédient couvre moins de N jours de repas (tous chiens confondus).')
+    ]));
   }
 
   /* ---------- Morceaux (suggestions à la saisie d'un achat — leur seul usage) ---------- */
