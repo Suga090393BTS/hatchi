@@ -10,7 +10,6 @@
   let range = 'week';   // 'week' | 'month'
   let view = 'acheter'; // 'acheter' | 'stock'
   let stockCat = 'tout'; // filtre catégorie du stock : 'tout' | 'viande' | 'legume'…
-  let stockLoc = 'tout'; // inventaire affiché : 'tout' | 'congelo' | 'frigo'
 
   const CAT_ORDER = ['viande', 'abats', 'os', 'entier', 'oeuf', 'legume', 'autre'];
   const CAT_LABEL = { viande: '🥩 Viandes', abats: '🫀 Abats', os: '🦴 Os', entier: '🐔 Animaux entiers', oeuf: '🥚 Œufs', legume: '🥕 Légumes', autre: '📦 Autre' };
@@ -141,12 +140,12 @@
     }
   }
 
-  // « ✓ Préparé » : la production maison rejoint le stock (frigo si frais, congélo sinon), coût 0 €
+  // « ✓ Préparé » : la production maison rejoint le stock, coût 0 €
   function openPrepareModal(ing, neededQty) {
     const piece = ing.unit === 'piece';
     let q = piece ? Math.ceil(neededQty) : neededQty;
     const body = h('div', null, [
-      h('p.muted.small', { style: 'margin:0 4px 10px' }, '🏡 ' + ing.name + ' — production maison, coût 0 €. La quantité rejoint ' + (['oeuf', 'legume'].includes(ing.category) ? 'le frigo.' : 'le congélo.')),
+      h('p.muted.small', { style: 'margin:0 4px 10px' }, '🏡 ' + ing.name + ' — production maison, coût 0 €. La quantité rejoint ton stock.'),
       h('div.field', null, [h('label', null, 'Quantité préparée' + (piece ? ' (pièces)' : ' (g)')),
         h('input.input', { type: 'number', min: '0', step: piece ? '1' : '50', value: q, onInput: (e) => q = +e.target.value || 0 })]),
       h('div.modal-actions', null, [
@@ -173,15 +172,9 @@
 
     root.appendChild(h('button.btn.block', { style: 'margin-bottom:12px', onClick: () => openPurchaseModal() }, '🛒 J’ai fait des courses'));
 
-    // Inventaire : tout, ou seulement le congélo / le frigo
-    root.appendChild(h('div.seg', { style: 'margin-bottom:12px' }, [['tout', 'Tout'], ['congelo', '❄️ Congélo'], ['frigo', '🍽 Frigo']].map(([v, l]) =>
-      h('button', { class: stockLoc === v ? 'on' : '', onClick: () => { stockLoc = v; App.rerender(); } }, l))));
-
+    // Inventaire : une seule quantité par ingrédient (plus de distinction frigo / congélo)
     const used = Store.needs(Store.planningDays());
-    const allIngs = Store.get().ingredients.filter((i) =>
-      stockLoc === 'congelo' ? Store.congeloOf(i.id) > 0 :
-      stockLoc === 'frigo' ? Store.fridgeOf(i.id) > 0 :
-      (Store.stockOf(i.id) > 0 || used[i.id]));
+    const allIngs = Store.get().ingredients.filter((i) => Store.stockOf(i.id) > 0 || used[i.id]);
 
     // Onglets de filtre par catégorie : je touche « Légumes » et je ne vois que les légumes
     const presentCats = CAT_ORDER.filter((cat) => allIngs.some((i) => i.category === cat));
@@ -196,35 +189,26 @@
     const ings = stockCat === 'tout' ? allIngs : allIngs.filter((i) => i.category === stockCat);
 
     if (!ings.length) {
-      root.appendChild(h('div.card', null, UI.emptyState(
-        stockLoc === 'frigo' ? '🍽' : stockLoc === 'congelo' ? '❄️' : '📦',
-        stockLoc === 'frigo' ? 'Rien au frigo' : stockLoc === 'congelo' ? 'Rien au congélo' : 'Aucun article en stock',
-        stockLoc === 'frigo' ? 'Utilise ⇄ sur un article du congélo pour sortir de quoi décongeler.' : 'Appuie sur « J’ai fait des courses » pour enregistrer ce que tu as acheté.')));
+      root.appendChild(h('div.card', null, UI.emptyState('📦', 'Aucun article en stock',
+        'Appuie sur « J’ai fait des courses » pour enregistrer ce que tu as acheté.')));
     } else {
       root.appendChild(h('div.card.flush', null, ings.map((ing) => {
-        const cong = Store.congeloOf(ing.id), fri = Store.fridgeOf(ing.id);
+        const qty = Store.stockOf(ing.id);
         const days = Store.coverageDays(ing.id);
         const cov = days === Infinity ? null : (days < 1 ? 'reste <1 j' : 'reste ~' + Math.floor(days) + ' j');
         const lowS = days !== Infinity && days < (Store.get().settings.stockAlertDays || 3);
-        const places = stockLoc === 'congelo' ? '❄️ ' + qtyLabel(ing, cong)
-          : stockLoc === 'frigo' ? '🍽 ' + qtyLabel(ing, fri)
-          : [cong ? '❄️ congélo ' + qtyLabel(ing, cong) : null, fri ? '🍽 frigo ' + qtyLabel(ing, fri) : null].filter(Boolean).join(' · ') || 'épuisé';
-        return h('div.row', null, [
+        return h('div.row', { onClick: () => editStock(ing) }, [
           h('div.row-ic', null, catIcon(ing.category)),
           h('div.row-main', null, [h('strong', null, ing.name),
-            h('small', null, [places, cov ? '  ·  ' : '',
+            h('small', null, [qty ? qtyLabel(ing, qty) : 'épuisé', cov ? '  ·  ' : '',
               cov ? h('span', { style: lowS ? 'color:var(--red);font-weight:700' : '' }, cov) : ''])]),
-          h('div.row-end', null, h('div.inline', { style: 'gap:6px' }, [
-            h('button.btn.subtle.icon', { title: 'Transférer congélo ⇄ frigo', onClick: () => openTransfer(ing) }, '⇄'),
-            h('button.btn.ghost.icon', { onClick: () => editStock(ing) }, '✎')
-          ]))
+          h('div.row-end', null, h('button.btn.ghost.icon', { onClick: () => editStock(ing) }, '✎'))
         ]);
       })));
-      root.appendChild(h('p.muted.small', { style: 'margin:10px 4px' }, '⇄ pour sortir du congélo vers le frigo (décongélation) ou l\'inverse. Les repas « donnés » piochent d\'abord dans le frigo, puis au congélo.'));
     }
 
-    // Historique des achats + dépenses du mois — seulement en vue « Tout »
-    const purchases = stockLoc === 'tout' ? Store.purchasesSorted() : [];
+    // Historique des achats + dépenses du mois
+    const purchases = Store.purchasesSorted();
     if (purchases.length) {
       const spent = Store.spentInMonth();
       root.appendChild(h('div.section-title', null, 'Mes courses récentes'));
@@ -242,23 +226,21 @@
       root.appendChild(h('p.muted.small.center', { style: 'margin:8px' }, 'Touche un achat pour le voir ou le supprimer.'));
     }
 
-    // Réglages propres aux courses — seulement en vue « Tout », en pied de page.
+    // Réglages propres aux courses, en pied de page.
     // (Ils étaient dans Réglages, loin de ce qu'ils pilotent.)
-    if (stockLoc === 'tout') {
-      const s = Store.get().settings;
-      root.appendChild(h('div.section-title', null, 'Réglages des courses'));
-      root.appendChild(h('div.card', null, [
-        h('div.field', { style: 'margin-bottom:0' }, [h('label', null, 'Alerte stock (jours)'),
-          h('input.input', { type: 'number', min: '1', value: s.stockAlertDays || 3,
-            onChange: (e) => Store.updateSettings({ stockAlertDays: +e.target.value || 3 }) })]),
-        h('p.muted.small', { style: 'margin:8px 4px 0' }, 'Préviens-moi quand un ingrédient couvre moins de N jours de repas (tous chiens confondus).')
-      ]));
-      root.appendChild(h('div.card', null, h('div.inline', { style: 'justify-content:space-between' }, [
-        h('div', null, [h('strong', null, Store.cuts().length + ' morceaux'),
-          h('div.muted.small', null, 'Suggestions à la saisie d’un achat')]),
-        h('button.btn.ghost.sm', { onClick: openCutsList }, 'Gérer')
-      ])));
-    }
+    const s = Store.get().settings;
+    root.appendChild(h('div.section-title', null, 'Réglages des courses'));
+    root.appendChild(h('div.card', null, [
+      h('div.field', { style: 'margin-bottom:0' }, [h('label', null, 'Alerte stock (jours)'),
+        h('input.input', { type: 'number', min: '1', value: s.stockAlertDays || 3,
+          onChange: (e) => Store.updateSettings({ stockAlertDays: +e.target.value || 3 }) })]),
+      h('p.muted.small', { style: 'margin:8px 4px 0' }, 'Préviens-moi quand un ingrédient couvre moins de N jours de repas (tous chiens confondus).')
+    ]));
+    root.appendChild(h('div.card', null, h('div.inline', { style: 'justify-content:space-between' }, [
+      h('div', null, [h('strong', null, Store.cuts().length + ' morceaux'),
+        h('div.muted.small', null, 'Suggestions à la saisie d’un achat')]),
+      h('button.btn.ghost.sm', { onClick: openCutsList }, 'Gérer')
+    ])));
   }
 
   /* ---------- Morceaux (suggestions à la saisie d'un achat — leur seul usage) ---------- */
@@ -306,45 +288,16 @@
     const piece = ing.unit === 'piece';
     const toUnit = (v) => piece ? v : +(v / 1000).toFixed(2);
     const fromUnit = (v) => piece ? Math.round(v) : Math.round(v * 1000);
-    let c = toUnit(Store.congeloOf(ing.id));
-    let f = toUnit(Store.fridgeOf(ing.id));
+    let q = toUnit(Store.stockOf(ing.id));
     const body = h('div', null, [
-      h('div.grid2', null, [
-        h('div.field', null, [h('label', null, '❄️ Congélo' + (piece ? ' (pièces)' : ' (kg)')),
-          h('input.input', { type: 'number', min: '0', step: piece ? '1' : '0.1', value: c, onInput: (e) => { c = +e.target.value || 0; } })]),
-        h('div.field', null, [h('label', null, '🍽 Frigo' + (piece ? ' (pièces)' : ' (kg)')),
-          h('input.input', { type: 'number', min: '0', step: piece ? '1' : '0.1', value: f, onInput: (e) => { f = +e.target.value || 0; } })])
-      ]),
+      h('div.field', null, [h('label', null, 'Quantité en stock' + (piece ? ' (pièces)' : ' (kg)')),
+        h('input.input', { type: 'number', min: '0', step: piece ? '1' : '0.1', value: q, onInput: (e) => { q = +e.target.value || 0; } })]),
       h('div.modal-actions', null, [
         h('button.btn.subtle', { onClick: () => UI.closeModal() }, 'Annuler'),
-        h('button.btn', { onClick: () => { Store.setStock(ing.id, fromUnit(c)); Store.setStock(ing.id, fromUnit(f), 'frigo'); UI.closeModal(); } }, 'Enregistrer')
+        h('button.btn', { onClick: () => { Store.setStock(ing.id, fromUnit(q)); UI.closeModal(); } }, 'Enregistrer')
       ])
     ]);
     UI.modal({ title: 'Stock — ' + ing.name, body });
-  }
-
-  // Transfert congélo ⇄ frigo (décongélation, ou retour au congélo)
-  function openTransfer(ing) {
-    const piece = ing.unit === 'piece';
-    const cong = Store.congeloOf(ing.id), fri = Store.fridgeOf(ing.id);
-    let q = piece ? Math.min(1, Math.max(cong, fri)) : Math.min(500, Math.max(cong, fri));
-    const body = h('div', null, [
-      h('p.muted.small', { style: 'margin:0 4px 10px' }, '❄️ Congélo : ' + qtyLabel(ing, cong) + '   ·   🍽 Frigo : ' + qtyLabel(ing, fri)),
-      h('div.field', null, [h('label', null, 'Quantité à transférer' + (piece ? ' (pièces)' : ' (g)')),
-        h('input.input', { type: 'number', min: '0', step: piece ? '1' : '50', value: q, onInput: (e) => q = +e.target.value || 0 })]),
-      h('button.btn.block', { style: 'margin-bottom:8px', disabled: !cong, onClick: () => {
-        if (!(q > 0)) { UI.toast('Indique une quantité'); return; }
-        Store.transferStock(ing.id, q, true);
-        UI.closeModal(); UI.toast(qtyLabel(ing, Math.min(q, cong)) + ' sorti au frigo (décongélation) ✓');
-      } }, '❄️ Congélo → 🍽 Frigo (décongeler)'),
-      h('button.btn.subtle.block', { disabled: !fri, onClick: () => {
-        if (!(q > 0)) { UI.toast('Indique une quantité'); return; }
-        Store.transferStock(ing.id, q, false);
-        UI.closeModal(); UI.toast(qtyLabel(ing, Math.min(q, fri)) + ' remis au congélo ✓');
-      } }, '🍽 Frigo → ❄️ Congélo'),
-      h('button.btn.subtle.block', { style: 'margin-top:8px', onClick: () => UI.closeModal() }, 'Annuler')
-    ]);
-    UI.modal({ title: '⇄ ' + ing.name, body });
   }
 
   /* ---------- Détail d'un achat (voir / supprimer) ---------- */

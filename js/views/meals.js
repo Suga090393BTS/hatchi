@@ -25,9 +25,7 @@
   const stockLabel = (i) => {
     const st = Store.stockOf(i.id);
     if (!(st > 0)) return 'épuisé';
-    const fmt = (q) => i.unit === 'piece' ? '×' + q : UI.grams(q);
-    const fri = Store.fridgeOf(i.id);
-    return fmt(st) + ' en stock' + (fri > 0 && fri < st ? ' (frigo ' + fmt(fri) + ')' : fri > 0 ? ' (au frigo)' : '');
+    return (i.unit === 'piece' ? '×' + st : UI.grams(st)) + ' en stock';
   };
 
   // Éditeur d'ingrédients partagé.

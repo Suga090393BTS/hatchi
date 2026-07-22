@@ -223,7 +223,7 @@ Avion : cabine pour les petits gabarits (selon compagnie), sinon soute pressuris
       journal: {},               // dateISO => {repasMatin,repasSoir,selles,humeur,sorties:{},who:{},promeneur,temp,soins:[],notes,photo}
       weights: [],               // [{id, date, kg}]
       stock: {},                 // congélateur : ingredientId => quantité (g ou pièces)
-      fridge: {},                // frigo (décongelé / frais) : ingredientId => quantité
+      fridge: {},                // hérité : ancien frigo, replié dans `stock` au chargement (voir normalize)
       people: seedPeople(),      // [{id, name}]
       purchases: [],             // [{id, date, items:[{ingredientId, qty}], cost}]
       cuts: seedCuts(),          // morceaux suggérés (['cuisse', 'bavette', …])
@@ -258,9 +258,6 @@ Avion : cabine pour les petits gabarits (selon compagnie), sinon soute pressuris
     else if (unit === 'ans') d.setFullYear(d.getFullYear() + every);
     return isoLocal(d);
   }
-
-  // Produits « frais » (rangés au frigo à l'achat plutôt qu'au congélo)
-  const isFresh = (ing) => !!ing && (ing.category === 'oeuf' || ing.category === 'legume');
 
   /* ---------- Helpers BARF / besoins ---------- */
   // Classe BARF d'un ingrédient pour le ratio 80/10/10
@@ -481,15 +478,17 @@ Avion : cabine pour les petits gabarits (selon compagnie), sinon soute pressuris
       s.healthPages = s.healthPages.concat(seedHealthPages().filter((p) => !have.has(p.title.toLowerCase())));
       s.seeded.healthPages = true;
     }
-    // Frigo v1 : les œufs et légumes déjà en stock déménagent du congélo vers le frigo (une fois)
-    if (!s.seeded.fridgeV1) {
-      s.ingredients.forEach((i) => {
-        if ((i.category === 'oeuf' || i.category === 'legume') && s.stock[i.id] > 0) {
-          s.fridge[i.id] = (s.fridge[i.id] || 0) + s.stock[i.id];
-          delete s.stock[i.id];
-        }
+    // Stock unifié : le frigo et le congélo ne font plus qu'un. Tout ce qui restait au
+    // frigo rejoint le stock unique — aucune quantité n'est perdue (stockOf() était déjà
+    // la somme des deux). Volontairement SANS drapeau « seeded » : le repli est idempotent
+    // (le frigo est vidé au passage) et rattrape ainsi tout état ancien reçu par la sync
+    // ou par l'import d'une sauvegarde.
+    if (s.fridge && Object.keys(s.fridge).length) {
+      Object.keys(s.fridge).forEach((id) => {
+        const q = s.fridge[id] || 0;
+        if (q > 0) s.stock[id] = (s.stock[id] || 0) + q;
       });
-      s.seeded.fridgeV1 = true;
+      s.fridge = {};
     }
     // Production maison : les œufs à prix 0 deviennent « coût zéro € » + ajout de l'œuf de caille
     if (!s.seeded.homemadeEggs) {
@@ -1029,23 +1028,10 @@ En cas d'urgence : appeler AVANT de partir (l'équipe prépare l'arrivée), tran
       return acc;
     },
 
-    /* ---- Stock : congélateur + frigo (décongelé/frais) ---- */
-    congeloOf(id) { return Math.max(0, Math.round(state.stock[id] || 0)); },
-    fridgeOf(id) { return Math.max(0, Math.round(state.fridge[id] || 0)); },
-    stockOf(id) { return this.congeloOf(id) + this.fridgeOf(id); }, // total disponible
-    setStock(id, val, loc) { commit((s) => { (loc === 'frigo' ? s.fridge : s.stock)[id] = Math.max(0, val || 0); }); },
-    adjustStock(id, delta, loc) { commit((s) => { const t = loc === 'frigo' ? s.fridge : s.stock; t[id] = Math.max(0, (t[id] || 0) + delta); }); },
-    // Transfert congélo ⇄ frigo (ex. sortir 500 g à décongeler)
-    transferStock(id, qty, toFridge) {
-      commit((s) => {
-        const from = toFridge ? s.stock : s.fridge;
-        const to = toFridge ? s.fridge : s.stock;
-        const q = Math.min(Math.max(0, qty || 0), from[id] || 0);
-        if (!q) return;
-        from[id] -= q;
-        to[id] = (to[id] || 0) + q;
-      });
-    },
+    /* ---- Stock : une seule quantité par ingrédient (plus de frigo/congélo) ---- */
+    stockOf(id) { return Math.max(0, Math.round(state.stock[id] || 0)); },
+    setStock(id, val) { commit((s) => { s.stock[id] = Math.max(0, val || 0); }); },
+    adjustStock(id, delta) { commit((s) => { s.stock[id] = Math.max(0, (s.stock[id] || 0) + delta); }); },
     // Besoins agrégés sur une plage => {id: qty}
     // Besoins agrégés sur une plage, TOUS chiens confondus (chacun avec son cycle)
     needs(range) {
@@ -1244,12 +1230,7 @@ En cas d'urgence : appeler AVANT de partir (l'équipe prépare l'arrivée), tran
       if (!clean.length) return null;
       const purchase = { id: uid(), date: date || todayISO(), items: clean.map((it) => { const o = { ingredientId: it.ingredientId, qty: it.qty }; if (it.cut) o.cut = it.cut; if (it.price) o.price = +it.price; return o; }), cost: cost ? +cost : 0 };
       commit((s) => {
-        // viandes/os → congélo ; œufs & légumes (frais) → frigo
-        clean.forEach((it) => {
-          const ing = s.ingredients.find((i) => i.id === it.ingredientId);
-          const t = isFresh(ing) ? s.fridge : s.stock;
-          t[it.ingredientId] = (t[it.ingredientId] || 0) + it.qty;
-        });
+        clean.forEach((it) => { s.stock[it.ingredientId] = (s.stock[it.ingredientId] || 0) + it.qty; });
         // un morceau inconnu rejoint automatiquement la liste des suggestions
         clean.forEach((it) => {
           const cut = (it.cut || '').trim();
@@ -1265,14 +1246,7 @@ En cas d'urgence : appeler AVANT de partir (l'équipe prépare l'arrivée), tran
         if (p && restock === false) { /* on ne retire pas du stock */ }
         else if (p) {
           p.items.forEach((it) => {
-            const ing = s.ingredients.find((i) => i.id === it.ingredientId);
-            const first = isFresh(ing) ? s.fridge : s.stock;
-            const second = isFresh(ing) ? s.stock : s.fridge;
-            let q = it.qty;
-            const take = Math.min(q, first[it.ingredientId] || 0);
-            if (take) first[it.ingredientId] -= take;
-            q -= take;
-            if (q) second[it.ingredientId] = Math.max(0, (second[it.ingredientId] || 0) - q);
+            s.stock[it.ingredientId] = Math.max(0, (s.stock[it.ingredientId] || 0) - it.qty);
           });
         }
         s.purchases = s.purchases.filter((x) => x.id !== id);
@@ -1291,14 +1265,8 @@ En cas d'urgence : appeler AVANT de partir (l'équipe prépare l'arrivée), tran
       if (!clean.length) return null;
       const entry = { id: uid(), date: date || todayISO(), slot: slot || 'matin', items: clean.map((it) => ({ ingredientId: it.ingredientId, qty: +it.qty })) };
       commit((s) => {
-        // on pioche d'abord dans le frigo (décongelé/frais), puis au congélo
         entry.items.forEach((it) => {
-          let q = it.qty;
-          const f = s.fridge[it.ingredientId] || 0;
-          const take = Math.min(f, q);
-          if (take) s.fridge[it.ingredientId] = f - take;
-          q -= take;
-          if (q) s.stock[it.ingredientId] = Math.max(0, (s.stock[it.ingredientId] || 0) - q);
+          s.stock[it.ingredientId] = Math.max(0, (s.stock[it.ingredientId] || 0) - it.qty);
         });
         s.fed.push(entry);
         const day = s.journal[entry.date] || { sorties: {}, soins: [] };
@@ -1313,8 +1281,8 @@ En cas d'urgence : appeler AVANT de partir (l'équipe prépare l'arrivée), tran
       commit((s) => {
         const e = s.fed.find((x) => x.id === id);
         if (!e) return;
-        // réintégré au frigo (c'est de là que ça venait en pratique)
-        e.items.forEach((it) => { s.fridge[it.ingredientId] = (s.fridge[it.ingredientId] || 0) + it.qty; });
+        // la quantité est réintégrée au stock
+        e.items.forEach((it) => { s.stock[it.ingredientId] = (s.stock[it.ingredientId] || 0) + it.qty; });
         s.fed = s.fed.filter((x) => x.id !== id);
         const others = s.fed.some((x) => x.date === e.date && x.slot === e.slot);
         if (!others && s.journal[e.date]) {
