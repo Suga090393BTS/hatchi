@@ -293,7 +293,7 @@
 
     if (!ings.length) {
       root.appendChild(h('div.card', null, UI.emptyState('📦', 'Aucun article en stock',
-        'Enregistre tes courses dans l’onglet Achats pour alimenter ton stock.')));
+        'Enregistre tes courses dans l’onglet Achats, ou renseigne directement tes quantités ci-dessous.')));
     } else {
       root.appendChild(h('div.card.flush', null, ings.map((ing) => {
         const qty = Store.stockOf(ing.id);
@@ -309,6 +309,10 @@
         ]);
       })));
     }
+
+    // Corriger la quantité d'un article, y compris absent de la liste ci-dessus
+    root.appendChild(h('button.btn.subtle.block', { style: 'margin-top:10px', onClick: openStockPicker },
+      '✎ Corriger une quantité'));
 
     // L'alerte pilote ce qui s'affiche ci-dessus : elle vit avec le stock
     root.appendChild(h('div.section-title', null, 'Réglage'));
@@ -361,17 +365,57 @@
     ]) });
   }
 
-  function editStock(ing) {
+  /* ---------- Renseigner la quantité de n'importe quel article ----------
+     La liste du stock ne montre que ce qui a une quantité ou figure dans la rotation :
+     un article à zéro et hors rotation n'avait donc aucune ligne à toucher, et sa
+     quantité était impossible à corriger. Ce sélecteur donne accès à tout le catalogue. */
+  let pickStockCat = 'tout';
+  function openStockPicker() {
+    const tabsBox = h('div');
+    const listBox = h('div');
+    function render() {
+      const ings = Store.get().ingredients;
+      const present = CAT_ORDER.filter((c) => ings.some((i) => i.category === c));
+      if (pickStockCat !== 'tout' && present.indexOf(pickStockCat) === -1) pickStockCat = 'tout';
+      UI.clear(tabsBox);
+      const t = UI.catTabs(present, pickStockCat, (c) => { pickStockCat = c; render(); });
+      if (t) tabsBox.appendChild(t);
+      const shown = ings
+        .filter((i) => pickStockCat === 'tout' || i.category === pickStockCat)
+        .slice().sort((a, b) => (CAT_ORDER.indexOf(a.category) - CAT_ORDER.indexOf(b.category)) || a.name.localeCompare(b.name, 'fr'));
+      UI.clear(listBox);
+      listBox.appendChild(h('div.card.flush', { style: 'max-height:46vh;overflow-y:auto' }, shown.map((ing) => {
+        const q = Store.stockOf(ing.id);
+        return h('div.row', { onClick: () => editStock(ing, openStockPicker) }, [
+          h('div.row-ic', null, catIcon(ing.category)),
+          h('div.row-main', null, [h('strong', null, ing.name),
+            h('small', { class: q ? '' : 'muted' }, q ? qtyLabel(ing, q) + ' en stock' : 'épuisé')]),
+          h('div.row-end', null, h('span.muted', null, '›'))
+        ]);
+      })));
+    }
+    render();
+    UI.modal({ title: 'Renseigner une quantité', body: h('div', null, [
+      h('p.muted.small', { style: 'margin:0 0 10px' }, 'Choisis l’article dont tu veux corriger la quantité — même s’il n’apparaît pas dans ta liste de stock.'),
+      tabsBox, listBox,
+      h('div.modal-actions', null, [h('button.btn.subtle', { onClick: () => UI.closeModal() }, 'Fermer')])
+    ]) });
+  }
+
+  // onDone : permet de revenir au sélecteur après avoir saisi une quantité
+  function editStock(ing, onDone) {
+    const done = () => { UI.closeModal(); if (onDone) setTimeout(onDone, 60); };
     const piece = ing.unit === 'piece';
     const toUnit = (v) => piece ? v : +(v / 1000).toFixed(2);
     const fromUnit = (v) => piece ? Math.round(v) : Math.round(v * 1000);
     let q = toUnit(Store.stockOf(ing.id));
     const body = h('div', null, [
+      h('p.muted.small', { style: 'margin:0 4px 10px' }, 'Indique la quantité réellement présente : elle remplace le compte de l’app.'),
       h('div.field', null, [h('label', null, 'Quantité en stock' + (piece ? ' (pièces)' : ' (kg)')),
         h('input.input', { type: 'number', min: '0', step: piece ? '1' : '0.1', value: q, onInput: (e) => { q = +e.target.value || 0; } })]),
       h('div.modal-actions', null, [
-        h('button.btn.subtle', { onClick: () => UI.closeModal() }, 'Annuler'),
-        h('button.btn', { onClick: () => { Store.setStock(ing.id, fromUnit(q)); UI.closeModal(); } }, 'Enregistrer')
+        h('button.btn.subtle', { onClick: done }, 'Annuler'),
+        h('button.btn', { onClick: () => { Store.setStock(ing.id, fromUnit(q)); UI.toast(ing.name + ' : ' + qtyLabel(ing, fromUnit(q)) + ' ✓'); done(); } }, 'Enregistrer')
       ])
     ]);
     UI.modal({ title: 'Stock — ' + ing.name, body });
