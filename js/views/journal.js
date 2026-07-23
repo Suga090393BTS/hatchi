@@ -106,26 +106,56 @@
     }, 60);
   }
 
+  // Cocher « donné » enregistre le repas prévu par la rotation : c'est ce qui déduit
+  // le stock. Sans cet enregistrement la case ne serait qu'une croix décorative, et le
+  // stock ne bougerait pas — c'était le cas avant.
   function repasField(iso, draft) {
-    const wrap = h('div.field', null, [
-      h('label', null, 'Repas'),
-      h('div.chip-row', null, [
-        chip('🌅 Matin donné', draft.repasMatin, () => draft.repasMatin = !draft.repasMatin),
-        chip('🌙 Soir donné', draft.repasSoir, () => draft.repasSoir = !draft.repasSoir)
-      ])
-    ]);
-    [['matin', '🌅', 'Matin'], ['soir', '🌙', 'Soir']].forEach(([slot, ic, label]) => {
-      const fed = Store.fedForSlot(iso, slot);
-      const summary = fed ? itemsSummary(fed.items) : '';
-      wrap.appendChild(h('div.inline', { style: 'gap:8px;margin-top:8px' }, [
-        h('span', { style: 'font-size:15px;flex:none' }, ic),
-        h('div', { style: 'flex:1;min-width:0' }, [
-          h('div.small', { class: summary ? '' : 'muted' }, summary || (label + ' — quantités non notées'))
-        ]),
-        h('button.btn.ghost.sm', { style: 'flex:none', onClick: () => openFedFor(iso, slot, fed, draft) },
-          summary ? 'Modifier' : '+ Quantités')
-      ]));
-    });
+    const SLOTS = [['matin', '🌅', 'Matin', 'repasMatin'], ['soir', '🌙', 'Soir', 'repasSoir']];
+    const wrap = h('div.field');
+
+    function render() {
+      UI.clear(wrap);
+      wrap.appendChild(h('label', null, 'Repas'));
+
+      const chips = h('div.chip-row');
+      SLOTS.forEach(([slot, ic, label, key]) => {
+        const fed = Store.fedForSlot(iso, slot);
+        const on = !!fed || !!draft[key];
+        chips.appendChild(h('button', { class: 'chip' + (on ? ' on' : ''), onClick: () => {
+          if (on) {
+            // « finalement non » : on retire le repas noté, le stock est réintégré
+            if (fed) { Store.removeFed(fed.id); UI.toast('Repas retiré — stock remis'); }
+            draft[key] = false;
+          } else {
+            const planned = Store.itemsForDay(iso, slot).map((it) => ({ ingredientId: it.ingredientId, qty: it.qty }));
+            if (planned.length) {
+              Store.logFed({ date: iso, slot, items: planned });
+              UI.toast('Repas noté ✓ — stock déduit');
+            } else {
+              UI.toast('Rien de prévu ce jour-là : utilise « + Quantités » pour déduire le stock');
+            }
+            draft[key] = true;
+          }
+          render();
+        } }, ic + ' ' + label + ' donné'));
+      });
+      wrap.appendChild(chips);
+
+      SLOTS.forEach(([slot, ic, label, key]) => {
+        const fed = Store.fedForSlot(iso, slot);
+        const summary = fed ? itemsSummary(fed.items) : '';
+        // coché sans enregistrement : on le dit, sinon on croirait le stock à jour
+        const texte = summary || (draft[key] ? label + ' — donné, quantités non notées (stock non déduit)'
+                                             : label + ' — quantités non notées');
+        wrap.appendChild(h('div.inline', { style: 'gap:8px;margin-top:8px' }, [
+          h('span', { style: 'font-size:15px;flex:none' }, ic),
+          h('div', { style: 'flex:1;min-width:0' }, [h('div.small', { class: summary ? '' : 'muted' }, texte)]),
+          h('button.btn.ghost.sm', { style: 'flex:none', onClick: () => openFedFor(iso, slot, fed, draft) },
+            summary ? 'Modifier' : '+ Quantités')
+        ]));
+      });
+    }
+    render();
     return wrap;
   }
 
