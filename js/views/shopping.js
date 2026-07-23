@@ -208,8 +208,68 @@
     ])));
   }
 
+  /* ---------- Rattrapage des repas jamais déduits ----------
+     Avant la v66, cocher « donné » dans la fiche du jour ne retirait rien du stock.
+     On propose de régulariser, en annonçant l'effet exact avant d'agir. */
+  function openBackfill(gaps) {
+    const mine = gaps.filter((g) => g.dogId === Store.get().currentDogId);
+    const others = gaps.filter((g) => g.dogId !== Store.get().currentDogId);
+    const totals = Store.fedGapTotals(mine);
+    const lignes = Object.keys(totals).map((id) => {
+      const ing = Store.ingredient(id);
+      if (!ing) return null;
+      const avant = Store.stockOf(id);
+      const apres = Math.max(0, avant - totals[id]);
+      return h('div.inline', { style: 'justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--line);font-size:14px' }, [
+        h('span', { style: 'flex:1;min-width:0' }, ing.name),
+        h('span.muted.small', null, '−' + qtyLabel(ing, totals[id])),
+        h('strong', { style: 'min-width:86px;text-align:right' }, qtyLabel(ing, avant) + ' → ' + qtyLabel(ing, apres))
+      ]);
+    }).filter(Boolean);
+
+    const dates = mine.map((g) => g.date).sort();
+    const body = h('div', null, [
+      h('p.muted.small', { style: 'margin:0 4px 12px' },
+        mine.length + ' repas ont été cochés « donné » sans que le stock soit déduit'
+        + (dates.length ? ' (du ' + UI.fmtShortYear(dates[0]) + ' au ' + UI.fmtShortYear(dates[dates.length - 1]) + ')' : '')
+        + '. Les quantités ci-dessous sont celles que ta rotation prévoyait ces jours-là.'),
+      lignes.length ? h('div.card', null, lignes) : h('p.muted.small', { style: 'margin:4px' }, 'Rien de chiffrable : la rotation ne prévoyait rien ces jours-là.'),
+      others.length ? h('p.muted.small', { style: 'margin:10px 4px 0' },
+        '⚠️ ' + others.length + ' autre' + (others.length > 1 ? 's' : '') + ' repas concerne' + (others.length > 1 ? 'nt' : '')
+        + ' ' + [...new Set(others.map((g) => g.dogName))].join(', ') + '. Bascule sur ce chien pour les corriger aussi.') : null,
+      h('div.modal-actions', null, [
+        h('button.btn.subtle', { onClick: () => {
+          Store.markBackfillDone(Store.todayISO());
+          UI.closeModal(); UI.toast('Ignoré — le stock n\'a pas été touché');
+        } }, 'Ne rien déduire'),
+        h('button.btn', { style: 'flex:2', disabled: !lignes.length, onClick: () => {
+          const n = Store.applyFedGaps(mine);
+          Store.markBackfillDone(Store.todayISO());
+          UI.closeModal(); UI.toast(n + ' repas déduits du stock ✓');
+        } }, 'Déduire du stock')
+      ])
+    ]);
+    UI.modal({ title: 'Régulariser le stock', body });
+  }
+
+  function backfillCard(gaps) {
+    return h('div.card', { style: 'background:var(--blue-100);border-color:#c9d5e0' }, [
+      h('div.inline', { style: 'gap:10px' }, [
+        h('span', { style: 'font-size:20px;flex:none' }, '🧮'),
+        h('div', { style: 'flex:1;min-width:0' }, [
+          h('strong', { style: 'font-size:14.5px' }, gaps.length + ' repas non déduits du stock'),
+          h('div.small.muted', null, 'Cochés « donné » avant la correction : le stock n’avait pas bougé.')
+        ])
+      ]),
+      h('button.btn.sm.block', { style: 'margin-top:10px', onClick: () => openBackfill(gaps) }, 'Voir et régulariser')
+    ]);
+  }
+
   /* ---------- STOCK : ce qu'il reste, par catégorie ---------- */
   function stockView(root) {
+    const gaps = Store.fedGaps();
+    if (gaps.length) root.appendChild(backfillCard(gaps));
+
     const low = Store.lowStock();
     if (low.length) {
       root.appendChild(h('div.card', { style: 'background:var(--amber-100);border-color:#eccf9a' }, [

@@ -1056,6 +1056,75 @@ En cas d'urgence : appeler AVANT de partir (l'équipe prépare l'arrivée), tran
       return Math.max(7, cw * 7);
     },
     restockFromNeeds(range) { const n = this.needs(range); commit((s) => { Object.keys(n).forEach((id) => { s.stock[id] = (s.stock[id] || 0) + n[id]; }); }); },
+
+    /* ---- Rattrapage : repas cochés « donné » mais jamais déduits du stock ----
+       Avant la v66, cocher « Matin/Soir donné » dans la fiche du jour ne créait aucun
+       enregistrement de quantités : le stock ne bougeait pas. On retrouve ces repas en
+       cherchant les journées marquées « donné » sans entrée `fed` correspondante ; la
+       quantité est celle que la rotation prévoyait ce jour-là (seule estimation possible).
+       Tous chiens confondus : le stock leur est commun. LECTURE SEULE. */
+    fedGaps() {
+      const skipUpTo = state.settings.backfillDoneUpTo || '';
+      const today = todayISO();
+      const dogs = state.dogs.length ? state.dogs : [{ id: state.currentDogId }];
+      const out = [];
+      dogs.forEach((d) => {
+        const active = d.id === state.currentDogId;
+        const journal = (active ? state.journal : d.journal) || {};
+        const fed = (active ? state.fed : d.fed) || [];
+        const plan = dogPlan(state, d);
+        const dogName = active ? state.settings.dogName : d.dogName;
+        Object.keys(journal).sort().forEach((date) => {
+          if (date > today) return;                    // pas de rattrapage dans le futur
+          if (skipUpTo && date <= skipUpTo) return;    // période déjà réglée par l'utilisatrice
+          const day = journal[date] || {};
+          [['matin', 'repasMatin'], ['soir', 'repasSoir']].forEach(([slot, key]) => {
+            if (!day[key]) return;
+            if (fed.some((e) => e.date === date && e.slot === slot)) return; // déjà déduit
+            const weeksFromAnchor = Math.floor(daysBetween(plan.anchor, mondayOf(date)) / 7);
+            const week = ((weeksFromAnchor % plan.cycleWeeks) + plan.cycleWeeks) % plan.cycleWeeks + 1;
+            const dayIdx = (new Date(date + 'T00:00:00').getDay() + 6) % 7;
+            const items = (plan.rotation[`w${week}-${dayIdx}-${slot}`] || [])
+              .filter((it) => it && it.ingredientId && it.qty > 0)
+              .map((it) => ({ ingredientId: it.ingredientId, qty: it.qty }));
+            if (items.length) out.push({ dogId: d.id, dogName, date, slot, items });
+          });
+        });
+      });
+      return out;
+    },
+    // Total par ingrédient de ce que le rattrapage retirerait — pour l'annoncer avant d'agir
+    fedGapTotals(gaps) {
+      const totals = {};
+      (gaps || this.fedGaps()).forEach((g) => g.items.forEach((it) => {
+        totals[it.ingredientId] = (totals[it.ingredientId] || 0) + it.qty;
+      }));
+      return totals;
+    },
+    // Applique le rattrapage : enregistre les repas manquants et déduit le stock.
+    // UNE seule écriture pour tout le lot — des mois d'historique feraient sinon autant
+    // d'enregistrements et de poussées de synchro. Seul le chien affiché est concerné :
+    // `fed` est par chien, et c'est le sien qui est monté à la racine de l'état.
+    applyFedGaps(gaps) {
+      const list = (gaps || this.fedGaps()).filter((g) => g.dogId === state.currentDogId);
+      if (!list.length) return 0;
+      commit((s) => {
+        list.forEach((g) => {
+          if (s.fed.some((e) => e.date === g.date && e.slot === g.slot)) return; // sécurité anti-doublon
+          g.items.forEach((it) => {
+            s.stock[it.ingredientId] = Math.max(0, (s.stock[it.ingredientId] || 0) - it.qty);
+          });
+          s.fed.push({ id: uid(), date: g.date, slot: g.slot, items: g.items.map((it) => ({ ingredientId: it.ingredientId, qty: it.qty })) });
+          const day = s.journal[g.date] || { sorties: {}, soins: [] };
+          if (g.slot === 'matin') day.repasMatin = true;
+          if (g.slot === 'soir') day.repasSoir = true;
+          s.journal[g.date] = day;
+        });
+      });
+      return list.length;
+    },
+    // « C'est réglé, ne me le redemande plus » : on ignore tout ce qui précède cette date
+    markBackfillDone(dateISO) { this.updateSettings({ backfillDoneUpTo: dateISO || todayISO() }); },
     // Jours de couverture d'un ingrédient selon la conso moyenne (tous chiens)
     coverageDays(id) {
       const cycleDays = this.planningDays();
