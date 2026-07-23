@@ -170,49 +170,33 @@
     ]);
   }
 
-  let stockCat = 'tout'; // onglet de catégorie du bloc « Mon stock »
-
-  // « Mon stock » : ce qu'il reste, recalculé à chaque rendu — donc à jour dès qu'un repas
-  // est noté (le store redessine la vue à chaque changement).
-  // Contient aussi ce qui est tombé à zéro mais reste nécessaire à la rotation : c'est ce
-  // bloc qui porte désormais l'alerte « bientôt épuisé », d'où l'urgent en premier.
-  function stockCard() {
-    const used = Store.needs(Store.planningDays());
-    const seuil = Store.get().settings.stockAlertDays || 3;
-    const rank = (d) => (d === Infinity ? Number.MAX_SAFE_INTEGER : d);
-    const rows = Store.get().ingredients
-      .map((ing) => ({ ing, qty: Store.stockOf(ing.id), days: Store.coverageDays(ing.id) }))
-      .filter((x) => x.qty > 0 || used[x.ing.id])
-      .sort((a, b) => rank(a.days) - rank(b.days));
-
-    if (!rows.length) {
-      return h('div', null, h('div.card', null, UI.emptyState('📦', 'Aucun stock',
-        'Note tes courses dans l’onglet Courses pour suivre ce qu’il te reste.')));
-    }
-
-    // Onglets de catégorie plutôt qu'une longue liste à dérouler
-    const present = UI.CAT_ORDER.filter((c) => rows.some((r) => r.ing.category === c));
-    if (stockCat !== 'tout' && present.indexOf(stockCat) === -1) stockCat = 'tout';
-    const tabs = UI.catTabs(present, stockCat, (c) => { stockCat = c; App.rerender(); });
-    const shown = stockCat === 'tout' ? rows : rows.filter((r) => r.ing.category === stockCat);
-
-    const card = h('div.card', null, shown.map(({ ing, qty, days }) => {
-      const low = days !== Infinity && days < seuil;
-      return h('div.stock-line', null, [
-        h('span', { style: 'flex:none' }, UI.catIcon(ing.category)),
-        h('span.n', null, ing.name),
-        h('span', { class: 'q' + (qty ? '' : ' out') }, qty ? (ing.unit === 'piece' ? '×' + qty : grams(qty)) : 'épuisé'),
-        h('span', { class: 'c' + (low ? ' low' : '') },
-          days === Infinity ? '' : (days < 1 ? '<1 j' : '~' + Math.floor(days) + ' j'))
-      ]);
-    }));
-    card.appendChild(h('button.linkbtn', { style: 'margin-top:8px', onClick: () => App.go('shopping') }, 'Gérer le stock ›'));
-    return h('div', null, [tabs, card]);
+  // Alerte compacte : une ligne, tap → Courses. Le détail du stock vit dans son
+  // onglet dédié (Courses › Stock) — l'accueil ne garde que le signal « il faut acheter ».
+  function lowStockAlert() {
+    const low = Store.lowStock();
+    if (!low.length) return null;
+    const noms = low.slice(0, 3).map((x) => x.ing.name).join(', ');
+    const reste = low.length - 3;
+    return h('button.card', {
+      style: 'background:var(--amber-100);width:100%;text-align:left;cursor:pointer;padding:12px 16px',
+      onClick: () => App.go('shopping')
+    }, h('div.inline', { style: 'gap:10px' }, [
+      h('span', { style: 'font-size:20px' }, '🧊'),
+      h('div', { style: 'flex:1;min-width:0' }, [
+        h('strong', { style: 'font-size:14.5px' }, low.length + ' ingrédient' + (low.length > 1 ? 's' : '') + ' bientôt épuisé' + (low.length > 1 ? 's' : '')),
+        h('div.small.muted', { style: 'white-space:nowrap;overflow:hidden;text-overflow:ellipsis' }, noms + (reste > 0 ? ' +' + reste + ' autres' : ''))
+      ]),
+      h('span.muted', null, '›')
+    ]));
   }
 
   Views.today = {
     render(root) {
       const iso = Store.todayISO();
+
+      // Alerte stock (uniquement s'il y a lieu) — reste tout en haut
+      const alert = lowStockAlert();
+      if (alert) root.appendChild(alert);
 
       // 1) La journée — noter d'abord (ordre choisi : Journal en haut)
       root.appendChild(h('div.section-title', null, 'La journée'));
@@ -230,11 +214,7 @@
       ]));
       root.appendChild(rationCard(iso));
 
-      // 3) Mon stock — juste sous les repas : on voit la quantité baisser après avoir noté
-      root.appendChild(h('div.section-title', null, 'Mon stock'));
-      root.appendChild(stockCard());
-
-      // 4) À faire — soins en retard, soins du jour et tâches, réunis dans une seule carte
+      // 3) À faire — soins en retard, soins du jour et tâches, réunis dans une seule carte
       root.appendChild(h('div.section-title', null, 'À faire'));
       root.appendChild(aFaireCard(iso));
     }
